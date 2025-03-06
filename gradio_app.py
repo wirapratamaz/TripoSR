@@ -296,7 +296,6 @@ Upload an image to generate a 3D model with customizable parameters.
                     interactive=False,
                     clear_color=[1.0, 1.0, 1.0, 1.0],  # White background
                     camera_position=[1.5, 1.5, 1.5],    # Better default camera position
-                    camera_target=[0, 0, 0],            # Look at center
                     height=600,                         # Larger preview
                     shadow_intensity=0.5,               # Better lighting
                 )
@@ -307,7 +306,6 @@ Upload an image to generate a 3D model with customizable parameters.
                     interactive=False,
                     clear_color=[1.0, 1.0, 1.0, 1.0],  # White background
                     camera_position=[1.5, 1.5, 1.5],    # Better default camera position
-                    camera_target=[0, 0, 0],            # Look at center
                     height=600,                         # Larger preview
                     shadow_intensity=0.5,               # Better lighting
                 )
