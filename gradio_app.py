@@ -93,11 +93,7 @@ def generate(image, mc_resolution, reference_model=None, formats=["obj", "glb"],
             
         # Map model quality to internal settings
         quality_settings = {
-            "Draft": {"chunk_size": 16384, "detail_factor": 0.7},
-            "Standard": {"chunk_size": 8192, "detail_factor": 1.0},
-            "High": {"chunk_size": 4096, "detail_factor": 1.3},
-            # Add Indonesian translations
-            "Draft": {"chunk_size": 16384, "detail_factor": 0.7},
+            "Konsep": {"chunk_size": 16384, "detail_factor": 0.7},
             "Standar": {"chunk_size": 8192, "detail_factor": 1.0},
             "Tinggi": {"chunk_size": 4096, "detail_factor": 1.3}
         }
@@ -106,19 +102,15 @@ def generate(image, mc_resolution, reference_model=None, formats=["obj", "glb"],
         model.renderer.set_chunk_size(quality_settings[model_quality]["chunk_size"])
         detail_factor = quality_settings[model_quality]["detail_factor"]
         
-        # Generate scene codes with adjusted parameters
+        # Generate scene codes
         scene_codes = model(image, device=device)
         
-        # Extract mesh with adjusted parameters - removed texture_quality parameter
+        # Extract mesh
         mesh = model.extract_mesh(
             scene_codes, 
             True, 
             resolution=mc_resolution
         )[0]
-        
-        # Apply mesh smoothing if needed
-        if smoothing_factor > 0:
-            mesh = mesh.smoothed(factor=smoothing_factor)
         
         # Apply standard orientation transformation
         mesh = to_gradio_3d_orientation(mesh)
@@ -126,27 +118,13 @@ def generate(image, mc_resolution, reference_model=None, formats=["obj", "glb"],
         # Apply additional fixes for better display
         mesh = fix_model_orientation(mesh)
         
-        # Load reference model if provided
-        ground_truth_mesh = None
-        if reference_model is not None:
-            try:
-                ground_truth_mesh = trimesh.load(reference_model.name)
-                logging.info(f"Loaded reference model: {reference_model.name}")
-            except Exception as e:
-                logging.error(f"Error loading reference model: {str(e)}")
-        
-        # Calculate evaluation metrics
-        metrics = calculate_metrics(mesh, ground_truth_mesh)
-        
-        # Export meshes with proper format handling
+        # Export meshes
         rv = []
         for format in formats:
             mesh_path = tempfile.NamedTemporaryFile(suffix=f".{format}", delete=False)
             if format == "glb":
-                # For GLB format, ensure proper export settings
                 mesh.export(mesh_path.name, file_type="glb")
             else:
-                # For OBJ format, include materials and textures
                 mesh.export(
                     mesh_path.name,
                     file_type="obj",
@@ -155,30 +133,8 @@ def generate(image, mc_resolution, reference_model=None, formats=["obj", "glb"],
                 )
             rv.append(mesh_path.name)
         
-        # Format metrics for display
-        metrics_text = (
-            f"F1-Score: {metrics['f1_score']:.3f}\n"
-            f"Chamfer Distance: {metrics['chamfer_distance']:.3f}\n"
-            f"IoU Score: {metrics['iou_score']:.3f}\n\n"
-            f"Mesh Quality Metrics:\n"
-            f"- Vertices: {metrics['vertices']}\n"
-            f"- Faces: {metrics['faces']}\n"
-            f"- Watertight: {'Yes' if metrics['watertight'] > 0.5 else 'No'}\n"
-            f"- Regularity: {metrics['regularity']:.3f}\n"
-            f"- Area Uniformity: {metrics['area_uniformity']:.3f}\n"
-            f"- Generation Settings: {model_quality} quality, {mc_resolution} resolution"
-        )
-        
-        comparison_note = "\n\nNote: Using estimated metrics (no reference model provided)" if ground_truth_mesh is None else "\n\nNote: Using comparison against reference model"
-        metrics_text += comparison_note
-        
-        # Add metrics to return values
-        rv.extend([
-            metrics["f1_score"],
-            metrics["chamfer_distance"],
-            metrics["iou_score"],
-            metrics_text
-        ])
+        # Add placeholder values for metrics that were removed
+        rv.extend([0.0, 0.0, 0.0, "Metrics calculation disabled"])
         
         # Clear CUDA cache after processing
         if torch.cuda.is_available():
@@ -189,7 +145,7 @@ def generate(image, mc_resolution, reference_model=None, formats=["obj", "glb"],
         if "CUDA out of memory" in str(e):
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
-            raise gr.Error("GPU out of memory. Try using a lower resolution or 'Draft' quality setting.")
+            raise gr.Error("GPU out of memory. Try using a lower resolution or 'Konsep' quality setting.")
         else:
             raise gr.Error(f"Error generating model: {str(e)}")
     except Exception as e:
@@ -200,7 +156,7 @@ def run_example(image_pil):
     preprocessed = preprocess(image_pil, False, 0.9)
     mesh_obj, mesh_glb, f1, cd, iou, metrics_text = generate(
         preprocessed, 128, None, ["obj", "glb"],
-        "Standard", 7, 0.3  # Default values for the parameters
+        "Standar", 7, 0.3
     )
     return preprocessed, mesh_obj, mesh_glb, f1, cd, iou, metrics_text
 
@@ -263,7 +219,7 @@ Unggah gambar untuk menghasilkan model 3D dengan parameter yang dapat disesuaika
                         label="Resolusi Marching Cubes",
                     )
                     model_quality = gr.Radio(
-                        choices=["Draft", "Standar", "Tinggi"],
+                        choices=["Konsep", "Standar", "Tinggi"],
                         value="Standar",
                         label="Kualitas Model",
                     )
