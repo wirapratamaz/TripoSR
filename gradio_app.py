@@ -64,6 +64,26 @@ def preprocess(input_image, do_remove_background, foreground_ratio):
     return image
 
 
+def fix_model_orientation(mesh):
+    """Fix the orientation of the model for proper display"""
+    # Rotate 90 degrees around X axis to match standard orientation
+    rotation_matrix = trimesh.transformations.rotation_matrix(
+        angle=np.pi/2,
+        direction=[1, 0, 0],
+        point=[0, 0, 0]
+    )
+    mesh.apply_transform(rotation_matrix)
+    
+    # Center the mesh
+    mesh.vertices -= mesh.vertices.mean(axis=0)
+    
+    # Scale to fit in a unit cube
+    scale = 1.0 / max(mesh.vertices.max(axis=0) - mesh.vertices.min(axis=0))
+    mesh.vertices *= scale
+    
+    return mesh
+
+
 def generate(image, mc_resolution, reference_model=None, formats=["obj", "glb"], 
              model_quality="Standard", texture_quality=7, smoothing_factor=0.3):
     try:
@@ -96,7 +116,11 @@ def generate(image, mc_resolution, reference_model=None, formats=["obj", "glb"],
         if smoothing_factor > 0:
             mesh = mesh.smoothed(factor=smoothing_factor)
         
+        # Apply standard orientation transformation
         mesh = to_gradio_3d_orientation(mesh)
+        
+        # Apply additional fixes for better display
+        mesh = fix_model_orientation(mesh)
         
         # Load reference model if provided
         ground_truth_mesh = None
@@ -110,11 +134,21 @@ def generate(image, mc_resolution, reference_model=None, formats=["obj", "glb"],
         # Calculate evaluation metrics
         metrics = calculate_metrics(mesh, ground_truth_mesh)
         
-        # Export meshes
+        # Export meshes with proper format handling
         rv = []
         for format in formats:
             mesh_path = tempfile.NamedTemporaryFile(suffix=f".{format}", delete=False)
-            mesh.export(mesh_path.name)
+            if format == "glb":
+                # For GLB format, ensure proper export settings
+                mesh.export(mesh_path.name, file_type="glb")
+            else:
+                # For OBJ format, include materials and textures
+                mesh.export(
+                    mesh_path.name,
+                    file_type="obj",
+                    include_texture=True,
+                    write_materials=True
+                )
             rv.append(mesh_path.name)
         
         # Format metrics for display
@@ -161,8 +195,8 @@ def generate(image, mc_resolution, reference_model=None, formats=["obj", "glb"],
 def run_example(image_pil):
     preprocessed = preprocess(image_pil, False, 0.9)
     mesh_obj, mesh_glb, f1, cd, iou, metrics_text = generate(
-        preprocessed, 128, None, ["obj", "glb"],  # Reduced from 256 to 128
-        "Standard", 7, 0.3  # Default values for the new parameters
+        preprocessed, 128, None, ["obj", "glb"],
+        "Standard", 7, 0.3  # Default values for the parameters
     )
     return preprocessed, mesh_obj, mesh_glb, f1, cd, iou, metrics_text
 
@@ -260,14 +294,24 @@ Upload an image to generate a 3D model with customizable parameters.
                 output_model_obj = gr.Model3D(
                     label="Output Model (OBJ Format)",
                     interactive=False,
+                    clear_color=[1.0, 1.0, 1.0, 1.0],  # White background
+                    camera_position=[1.5, 1.5, 1.5],    # Better default camera position
+                    camera_target=[0, 0, 0],            # Look at center
+                    height=600,                         # Larger preview
+                    shadow_intensity=0.5,               # Better lighting
                 )
-                gr.Markdown("Note: The model shown here is flipped. Download to get correct results.")
+                gr.Markdown("Note: Download to get the best viewing experience.")
             with gr.Tab("GLB"):
                 output_model_glb = gr.Model3D(
                     label="Output Model (GLB Format)",
                     interactive=False,
+                    clear_color=[1.0, 1.0, 1.0, 1.0],  # White background
+                    camera_position=[1.5, 1.5, 1.5],    # Better default camera position
+                    camera_target=[0, 0, 0],            # Look at center
+                    height=600,                         # Larger preview
+                    shadow_intensity=0.5,               # Better lighting
                 )
-                gr.Markdown("Note: The model shown here has a darker appearance. Download to get correct results.")
+                gr.Markdown("Note: Download to get the best viewing experience.")
             with gr.Column():
                 with gr.Group():
                     evaluation_box = gr.Textbox(
