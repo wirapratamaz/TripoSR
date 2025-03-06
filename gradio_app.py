@@ -95,7 +95,11 @@ def generate(image, mc_resolution, reference_model=None, formats=["obj", "glb"],
         quality_settings = {
             "Draft": {"chunk_size": 16384, "detail_factor": 0.7},
             "Standard": {"chunk_size": 8192, "detail_factor": 1.0},
-            "High": {"chunk_size": 4096, "detail_factor": 1.3}
+            "High": {"chunk_size": 4096, "detail_factor": 1.3},
+            # Add Indonesian translations
+            "Draft": {"chunk_size": 16384, "detail_factor": 0.7},
+            "Standar": {"chunk_size": 8192, "detail_factor": 1.0},
+            "Tinggi": {"chunk_size": 4096, "detail_factor": 1.3}
         }
         
         # Apply settings based on model quality
