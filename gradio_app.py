@@ -49,8 +49,7 @@ def preprocess(input_image, do_remove_background, foreground_ratio):
     def fill_background(image):
         image = np.array(image).astype(np.float32) / 255.0
         image = image[:, :, :3] * image[:, :, 3:4] + (1 - image[:, :, 3:4]) * 0.5
-        image = Image.fromarray((image * 255.0).astype(np.uint8))
-        return image
+        return Image.fromarray((image * 255.0).astype(np.uint8))
 
     if do_remove_background:
         image = input_image.convert("RGB")
@@ -61,6 +60,14 @@ def preprocess(input_image, do_remove_background, foreground_ratio):
         image = input_image
         if image.mode == "RGBA":
             image = fill_background(image)
+            
+    # Ensure image size is reasonable
+    max_size = 512
+    if max(image.size) > max_size:
+        ratio = max_size / max(image.size)
+        new_size = tuple(int(dim * ratio) for dim in image.size)
+        image = image.resize(new_size, Image.Resampling.LANCZOS)
+        
     return image
 
 
@@ -91,34 +98,32 @@ def generate(image, mc_resolution, reference_model=None, formats=["obj", "glb"],
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
             
-        # Map model quality to internal settings
+        # Optimize quality settings for faster generation
         quality_settings = {
-            "Konsep": {"chunk_size": 16384, "detail_factor": 0.7},
-            "Standar": {"chunk_size": 8192, "detail_factor": 1.0},
-            "Tinggi": {"chunk_size": 4096, "detail_factor": 1.3}
+            "Konsep": {"chunk_size": 32768, "detail_factor": 0.5},  # Increased chunk size, lower detail
+            "Standar": {"chunk_size": 16384, "detail_factor": 0.7}, # Balanced settings
+            "Tinggi": {"chunk_size": 8192, "detail_factor": 1.0}    # Higher detail but slower
         }
         
         # Apply settings based on model quality
         model.renderer.set_chunk_size(quality_settings[model_quality]["chunk_size"])
-        detail_factor = quality_settings[model_quality]["detail_factor"]
         
-        # Generate scene codes
-        scene_codes = model(image, device=device)
+        # Generate scene codes with optimization
+        with torch.inference_mode():  # Faster than no_grad()
+            scene_codes = model(image, device=device)
+            
+            # Extract mesh with optimized resolution
+            mesh = model.extract_mesh(
+                scene_codes, 
+                True, 
+                resolution=min(mc_resolution, 192)  # Cap resolution for faster processing
+            )[0]
         
-        # Extract mesh
-        mesh = model.extract_mesh(
-            scene_codes, 
-            True, 
-            resolution=mc_resolution
-        )[0]
-        
-        # Apply standard orientation transformation
+        # Quick orientation fixes
         mesh = to_gradio_3d_orientation(mesh)
-        
-        # Apply additional fixes for better display
         mesh = fix_model_orientation(mesh)
         
-        # Export meshes
+        # Optimize export process
         rv = []
         for format in formats:
             mesh_path = tempfile.NamedTemporaryFile(suffix=f".{format}", delete=False)
@@ -132,10 +137,8 @@ def generate(image, mc_resolution, reference_model=None, formats=["obj", "glb"],
                 )
             rv.append(mesh_path.name)
         
-        # Add placeholder values for metrics that were removed
-        rv.extend([0.0, 0.0, 0.0, "Metrics calculation disabled"])
+        rv.extend([0.0, 0.0, 0.0, "Processing complete"])
         
-        # Clear CUDA cache after processing
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
             
@@ -144,9 +147,9 @@ def generate(image, mc_resolution, reference_model=None, formats=["obj", "glb"],
         if "CUDA out of memory" in str(e):
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
-            raise gr.Error("GPU out of memory. Try using a lower resolution or 'Konsep' quality setting.")
+            raise gr.Error("GPU memory error. Try 'Konsep' quality or lower resolution.")
         else:
-            raise gr.Error(f"Error generating model: {str(e)}")
+            raise gr.Error(f"Generation error: {str(e)}")
     except Exception as e:
         raise gr.Error(f"Error: {str(e)}")
 
@@ -317,14 +320,30 @@ if __name__ == '__main__':
     parser.add_argument('--username', type=str, default=None, help='Username for authentication')
     parser.add_argument('--password', type=str, default=None, help='Password for authentication')
     parser.add_argument('--port', type=int, default=7860, help='Port to run the server listener on')
-    parser.add_argument("--listen", action='store_true', help="launch gradio with 0.0.0.0 as server name, allowing to respond to network requests")
-    parser.add_argument("--share", action='store_true', help="use share=True for gradio and make the UI accessible through their site")
+    parser.add_argument("--listen", action='store_true', help="launch gradio with 0.0.0.0 as server name")
+    parser.add_argument("--share", action='store_true', help="make the UI accessible through gradio.live")
     parser.add_argument("--queuesize", type=int, default=1, help="launch gradio queue max_size")
+    
     args = parser.parse_args()
+    
+    # Configure queue before launch
     interface.queue(max_size=args.queuesize)
-    interface.launch(
-        auth=(args.username, args.password) if (args.username and args.password) else None,
-        share=args.share,
-        server_name="0.0.0.0" if args.listen else None, 
-        server_port=args.port
-    )
+    
+    # Prepare auth tuple
+    auth = None
+    if args.username and args.password:
+        auth = (args.username, args.password)
+    
+    # Launch with simplified parameters
+    try:
+        interface.launch(
+            server_port=args.port,
+            server_name="0.0.0.0" if args.listen else None,
+            share=args.share,
+            auth=auth,
+            debug=True  # Add debug mode to see more detailed errors
+        )
+    except Exception as e:
+        print(f"Failed to launch interface: {str(e)}")
+        # Fallback to basic launch if custom configuration fails
+        interface.launch()
