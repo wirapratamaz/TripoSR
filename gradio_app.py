@@ -128,8 +128,7 @@ def generate(image, mc_resolution, reference_model=None, formats=["obj", "glb"],
                 mesh.export(
                     mesh_path.name,
                     file_type="obj",
-                    include_texture=True,
-                    write_materials=True
+                    include_texture=True
                 )
             rv.append(mesh_path.name)
         
@@ -251,19 +250,19 @@ Unggah gambar untuk menghasilkan model 3D dengan parameter yang dapat disesuaika
                     interactive=False,
                     height=600,                         # Larger preview
                 )
-                gr.Markdown("Note: Download to get the best viewing experience.")
+                gr.Markdown("Catatan: Unduh untuk mendapatkan pengalaman melihat terbaik.")
             with gr.Tab("GLB"):
                 output_model_glb = gr.Model3D(
                     label="Model Output (Format GLB)",
                     interactive=False,
                     height=600,                         # Larger preview
                 )
-                gr.Markdown("Note: Download to get the best viewing experience.")
+                gr.Markdown("Catatan: Unduh untuk mendapatkan pengalaman melihat terbaik.")
             with gr.Column():
                 with gr.Group():
                     evaluation_box = gr.Textbox(
-                        label="Model Evaluation Metrics",
-                        value="Evaluation metrics will appear here after generation",
+                        label="Metrik Evaluasi Model",
+                        value="Metrik evaluasi akan muncul di sini setelah pembuatan",
                         interactive=False
                     )
                     with gr.Row():
