@@ -289,28 +289,27 @@ Unggah gambar untuk menghasilkan model 3D dengan parameter yang dapat disesuaika
                 output_model_obj = gr.Model3D(
                     label="Model Output (Format OBJ)",
                     interactive=False,
-                    clear_color=[1.0, 1.0, 1.0, 1.0],
-                    camera_position=[1.5, 1.5, 1.5],
-                    camera_target=[0, 0, 0],
-                    height=600,
-                    shadow_intensity=0.5,
+                    height=600,                         # Larger preview
                 )
-                gr.Markdown("Catatan: Unduh untuk mendapatkan pengalaman tampilan terbaik.")
+                gr.Markdown("Note: Download to get the best viewing experience.")
             with gr.Tab("GLB"):
                 output_model_glb = gr.Model3D(
                     label="Model Output (Format GLB)",
                     interactive=False,
-                    clear_color=[1.0, 1.0, 1.0, 1.0],
+                    height=600,                         # Larger preview
                 )
-            with gr.Row():
-                f1_score = gr.Number(label="Skor F1", value=0.0, interactive=False)
-                chamfer_dist = gr.Number(label="Jarak Chamfer", value=0.0, interactive=False)
-                iou_score = gr.Number(label="Skor IoU", value=0.0, interactive=False)
-            evaluation_box = gr.Textbox(
-                label="Hasil Evaluasi",
-                interactive=False,
-                lines=8
-            )
+                gr.Markdown("Note: Download to get the best viewing experience.")
+            with gr.Column():
+                with gr.Group():
+                    evaluation_box = gr.Textbox(
+                        label="Model Evaluation Metrics",
+                        value="Evaluation metrics will appear here after generation",
+                        interactive=False
+                    )
+                    with gr.Row():
+                        f1_score = gr.Number(label="F1-Score", value=0.0, interactive=False)
+                        chamfer_dist = gr.Number(label="Chamfer Distance", value=0.0, interactive=False)
+                        iou_score = gr.Number(label="IoU Score", value=0.0, interactive=False)
     with gr.Row(variant="panel"):
         gr.Examples(
             examples=[
