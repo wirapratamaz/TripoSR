@@ -98,44 +98,46 @@ def generate(image, mc_resolution, reference_model=None, formats=["obj", "glb"],
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
             
-        # Optimize quality settings for faster generation
+        # Create a permanent output directory
+        output_dir = os.path.join(os.getcwd(), "outputs")
+        os.makedirs(output_dir, exist_ok=True)
+        
+        # Generate timestamp for unique filenames
+        timestamp = time.strftime("%Y%m%d_%H%M%S")
+        
+        # Quality settings remain the same
         quality_settings = {
-            "Konsep": {"chunk_size": 32768, "detail_factor": 0.5},  # Increased chunk size, lower detail
-            "Standar": {"chunk_size": 16384, "detail_factor": 0.7}, # Balanced settings
-            "Tinggi": {"chunk_size": 8192, "detail_factor": 1.0}    # Higher detail but slower
+            "Konsep": {"chunk_size": 32768, "detail_factor": 0.5},
+            "Standar": {"chunk_size": 16384, "detail_factor": 0.7},
+            "Tinggi": {"chunk_size": 8192, "detail_factor": 1.0}
         }
         
-        # Apply settings based on model quality
         model.renderer.set_chunk_size(quality_settings[model_quality]["chunk_size"])
         
-        # Generate scene codes with optimization
-        with torch.inference_mode():  # Faster than no_grad()
+        with torch.inference_mode():
             scene_codes = model(image, device=device)
-            
-            # Extract mesh with optimized resolution
             mesh = model.extract_mesh(
                 scene_codes, 
                 True, 
-                resolution=min(mc_resolution, 192)  # Cap resolution for faster processing
+                resolution=min(mc_resolution, 192)
             )[0]
         
-        # Quick orientation fixes
         mesh = to_gradio_3d_orientation(mesh)
         mesh = fix_model_orientation(mesh)
         
-        # Optimize export process
+        # Save files with permanent paths
         rv = []
         for format in formats:
-            mesh_path = tempfile.NamedTemporaryFile(suffix=f".{format}", delete=False)
+            file_path = os.path.join(output_dir, f"model_{timestamp}.{format}")
             if format == "glb":
-                mesh.export(mesh_path.name, file_type="glb")
+                mesh.export(file_path, file_type="glb")
             else:
                 mesh.export(
-                    mesh_path.name,
+                    file_path,
                     file_type="obj",
                     include_texture=True
                 )
-            rv.append(mesh_path.name)
+            rv.append(file_path)
         
         rv.extend([0.0, 0.0, 0.0, "Processing complete"])
         
@@ -247,20 +249,17 @@ Unggah gambar untuk menghasilkan model 3D dengan parameter yang dapat disesuaika
                 submit = gr.Button("Buat Model 3D", variant="primary")
                 evaluation_info = gr.Button("📊 Info Evaluasi", elem_id="evaluation_info")
         with gr.Column():
-            with gr.Tab("OBJ"):
-                output_model_obj = gr.Model3D(
-                    label="Model Output (Format OBJ)",
-                    interactive=False,
-                    height=600,                         # Larger preview
+            with gr.Row():
+                output_model_obj = gr.File(
+                    label="Model OBJ",
+                    file_types=[".obj"],
+                    interactive=False
                 )
-                gr.Markdown("Catatan: Unduh untuk mendapatkan pengalaman melihat terbaik.")
-            with gr.Tab("GLB"):
-                output_model_glb = gr.Model3D(
-                    label="Model Output (Format GLB)",
-                    interactive=False,
-                    height=600,                         # Larger preview
+                output_model_glb = gr.File(
+                    label="Model GLB",
+                    file_types=[".glb"],
+                    interactive=False
                 )
-                gr.Markdown("Catatan: Unduh untuk mendapatkan pengalaman melihat terbaik.")
             with gr.Column():
                 with gr.Group():
                     evaluation_box = gr.Textbox(
