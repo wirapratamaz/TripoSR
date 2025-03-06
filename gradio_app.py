@@ -201,126 +201,116 @@ def run_example(image_pil):
     return preprocessed, mesh_obj, mesh_glb, f1, cd, iou, metrics_text
 
 
-with gr.Blocks(title="3D Model Generation") as interface:
+with gr.Blocks(title="Generasi Model 3D") as interface:
     gr.Markdown(
         """    
-# 3D Model Generation from Images
+# Generasi Model 3D dari Gambar
 
-Upload an image to generate a 3D model with customizable parameters.
+Unggah gambar untuk menghasilkan model 3D dengan parameter yang dapat disesuaikan.
 
 ## Fine-Tuning Parameters
 
-- **Foreground Ratio**: Controls how much of the image is considered foreground when processing. Higher values focus more on the central object.
-- **Marching Cubes Resolution**: Controls the detail level of the 3D mesh. Higher values create more detailed models but require more processing power.
-- **Model Quality**: Sets overall quality level, affecting processing time and result detail:
-  - Draft: Faster but less detailed
-  - Standard: Balanced option for most cases
-  - High: More detailed but slower processing
-- **Texture Quality**: Controls the detail of textures applied to the model. Higher values create more detailed textures.
-- **Mesh Smoothing**: Applies smoothing to the final model. Higher values create smoother surfaces but may lose fine details.
+- **Rasio Latar Depan**: Mengontrol seberapa banyak gambar yang dianggap sebagai latar depan saat pemrosesan. Nilai lebih tinggi akan lebih fokus pada objek utama.
+- **Resolusi Marching Cubes**: Mengontrol tingkat detail mesh 3D. Nilai lebih tinggi menciptakan model lebih detail tetapi membutuhkan daya pemrosesan lebih besar.
+- **Kualitas Model**: Mengatur tingkat kualitas keseluruhan, mempengaruhi waktu pemrosesan dan detail hasil:
+  - Draft: Lebih cepat tapi kurang detail
+  - Standar: Pilihan seimbang untuk kebanyakan kasus
+  - Tinggi: Lebih detail tapi pemrosesan lebih lambat
+- **Kualitas Tekstur**: Mengontrol detail tekstur yang diterapkan pada model. Nilai lebih tinggi menciptakan tekstur lebih detail.
+- **Penghalusan Mesh**: Menerapkan penghalusan pada model akhir. Nilai lebih tinggi menciptakan permukaan lebih halus tapi mungkin kehilangan detail halus.
 
 ## Tips:
-1. If you find the result is unsatisfied, try adjusting the foreground ratio and mesh smoothing parameters.
-2. For more detailed models, increase the Marching Cubes Resolution and set Model Quality to "High".
-3. It's better to disable "Remove Background" for the provided examples (except for the last one) since they have been already preprocessed.
-4. Otherwise, please disable "Remove Background" option only if your input image is RGBA with transparent background, image contents are centered and occupy more than 70% of image width or height.
-5. For accurate evaluation metrics, upload a reference model in OBJ, GLB or STL format.
-6. Processing time increases with higher resolution and quality settings.
+1. Jika hasil tidak memuaskan, coba sesuaikan parameter rasio latar depan dan penghalusan mesh.
+2. Untuk model lebih detail, tingkatkan Resolusi Marching Cubes dan atur Kualitas Model ke "Tinggi".
+3. Lebih baik nonaktifkan "Hapus Latar Belakang" untuk contoh yang disediakan (kecuali yang terakhir) karena sudah diproses sebelumnya.
+4. Nonaktifkan opsi "Hapus Latar Belakang" hanya jika gambar input Anda adalah RGBA dengan latar belakang transparan, konten gambar terpusat dan menempati lebih dari 70% lebar atau tinggi gambar.
+5. Untuk metrik evaluasi yang akurat, unggah model referensi dalam format OBJ, GLB atau STL.
+6. Waktu pemrosesan meningkat dengan pengaturan resolusi dan kualitas yang lebih tinggi.
     """
     )
     with gr.Row(variant="panel"):
         with gr.Column():
             with gr.Row():
                 input_image = gr.Image(
-                    label="Input Image",
+                    label="Gambar Input",
                     image_mode="RGBA",
                     sources="upload",
                     type="pil",
                     elem_id="content_image",
                 )
-                processed_image = gr.Image(label="Processed Image", interactive=False)
+                processed_image = gr.Image(label="Gambar Terproses", interactive=False)
             with gr.Row():
                 with gr.Group():
                     do_remove_background = gr.Checkbox(
-                        label="Remove Background", value=True
+                        label="Hapus Latar Belakang", value=True
                     )
                     foreground_ratio = gr.Slider(
-                        label="Foreground Ratio",
                         minimum=0.5,
                         maximum=1.0,
-                        value=0.85,
+                        value=0.9,
                         step=0.05,
+                        label="Rasio Latar Depan",
                     )
                     mc_resolution = gr.Slider(
-                        label="Marching Cubes Resolution",
-                        minimum=32,
+                        minimum=64,
                         maximum=256,
                         value=128,
                         step=32,
-                        info="Higher resolution creates more detailed models but uses more memory"
+                        label="Resolusi Marching Cubes",
                     )
                     model_quality = gr.Radio(
-                        label="Model Quality",
-                        choices=["Draft", "Standard", "High"],
-                        value="Standard",
-                        info="Higher quality takes longer but produces better results"
+                        choices=["Draft", "Standar", "Tinggi"],
+                        value="Standar",
+                        label="Kualitas Model",
                     )
                     texture_quality = gr.Slider(
-                        label="Texture Quality",
                         minimum=1,
                         maximum=10,
                         value=7,
                         step=1,
-                        info="Higher values produce more detailed textures"
+                        label="Kualitas Tekstur",
                     )
                     smoothing_factor = gr.Slider(
-                        label="Mesh Smoothing",
                         minimum=0.0,
                         maximum=1.0,
                         value=0.3,
                         step=0.1,
-                        info="Higher values produce smoother meshes but may lose detail"
+                        label="Faktor Penghalusan",
                     )
                     reference_model = gr.File(
-                        label="Reference Model (Optional)",
+                        label="Model Referensi (Opsional)",
                         file_types=[".obj", ".glb", ".stl"],
-                        type="filepath"
                     )
             with gr.Row():
-                submit = gr.Button("Generate", elem_id="generate", variant="primary")
-                evaluation_info = gr.Button("📊 Evaluation Info", elem_id="evaluation_info")
+                submit = gr.Button("Buat Model 3D", variant="primary")
+                evaluation_info = gr.Button("📊 Info Evaluasi", elem_id="evaluation_info")
         with gr.Column():
             with gr.Tab("OBJ"):
                 output_model_obj = gr.Model3D(
-                    label="Output Model (OBJ Format)",
+                    label="Model Output (Format OBJ)",
                     interactive=False,
-                    clear_color=[1.0, 1.0, 1.0, 1.0],  # White background
-                    camera_position=[1.5, 1.5, 1.5],    # Better default camera position
-                    height=600,                         # Larger preview
-                    shadow_intensity=0.5,               # Better lighting
+                    clear_color=[1.0, 1.0, 1.0, 1.0],
+                    camera_position=[1.5, 1.5, 1.5],
+                    camera_target=[0, 0, 0],
+                    height=600,
+                    shadow_intensity=0.5,
                 )
-                gr.Markdown("Note: Download to get the best viewing experience.")
+                gr.Markdown("Catatan: Unduh untuk mendapatkan pengalaman tampilan terbaik.")
             with gr.Tab("GLB"):
                 output_model_glb = gr.Model3D(
-                    label="Output Model (GLB Format)",
+                    label="Model Output (Format GLB)",
                     interactive=False,
-                    clear_color=[1.0, 1.0, 1.0, 1.0],  # White background
-                    camera_position=[1.5, 1.5, 1.5],    # Better default camera position
-                    height=600,                         # Larger preview
-                    shadow_intensity=0.5,               # Better lighting
+                    clear_color=[1.0, 1.0, 1.0, 1.0],
                 )
-                gr.Markdown("Note: Download to get the best viewing experience.")
-            with gr.Column():
-                with gr.Group():
-                    evaluation_box = gr.Textbox(
-                        label="Model Evaluation Metrics",
-                        value="Evaluation metrics will appear here after generation",
-                        interactive=False
-                    )
-                    with gr.Row():
-                        f1_score = gr.Number(label="F1-Score", value=0.0, interactive=False)
-                        chamfer_dist = gr.Number(label="Chamfer Distance", value=0.0, interactive=False)
-                        iou_score = gr.Number(label="IoU Score", value=0.0, interactive=False)
+            with gr.Row():
+                f1_score = gr.Number(label="Skor F1", value=0.0, interactive=False)
+                chamfer_dist = gr.Number(label="Jarak Chamfer", value=0.0, interactive=False)
+                iou_score = gr.Number(label="Skor IoU", value=0.0, interactive=False)
+            evaluation_box = gr.Textbox(
+                label="Hasil Evaluasi",
+                interactive=False,
+                lines=8
+            )
     with gr.Row(variant="panel"):
         gr.Examples(
             examples=[
@@ -333,7 +323,7 @@ Upload an image to generate a 3D model with customizable parameters.
             outputs=[processed_image, output_model_obj, output_model_glb, f1_score, chamfer_dist, iou_score, evaluation_box],
             cache_examples=False,
             fn=partial(run_example),
-            label="Examples",
+            label="Contoh",
             examples_per_page=20,
         )
     
