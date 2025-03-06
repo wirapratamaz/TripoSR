@@ -18,10 +18,14 @@ from tsr.evaluation import calculate_metrics
 import argparse
 
 
+# Configure CUDA memory settings
 if torch.cuda.is_available():
     device = "cuda:0"
+    # Lower default chunk size to reduce memory usage
+    default_chunk_size = 8192
 else:
     device = "cpu"
+    default_chunk_size = 8192
 
 model = TSR.from_pretrained(
     "stabilityai/TripoSR",
@@ -30,7 +34,7 @@ model = TSR.from_pretrained(
 )
 
 # adjust the chunk size to balance between speed and memory usage
-model.renderer.set_chunk_size(8192)
+model.renderer.set_chunk_size(default_chunk_size)
 model.to(device)
 
 rembg_session = rembg.new_session()
@@ -62,85 +66,102 @@ def preprocess(input_image, do_remove_background, foreground_ratio):
 
 def generate(image, mc_resolution, reference_model=None, formats=["obj", "glb"], 
              model_quality="Standard", texture_quality=7, smoothing_factor=0.3):
-    # Map model quality to internal settings
-    quality_settings = {
-        "Draft": {"chunk_size": 16384, "detail_factor": 0.7},
-        "Standard": {"chunk_size": 8192, "detail_factor": 1.0},
-        "High": {"chunk_size": 4096, "detail_factor": 1.3}
-    }
-    
-    # Apply settings based on model quality
-    model.renderer.set_chunk_size(quality_settings[model_quality]["chunk_size"])
-    detail_factor = quality_settings[model_quality]["detail_factor"]
-    
-    # Generate scene codes with adjusted parameters
-    scene_codes = model(image, device=device)
-    
-    # Extract mesh with adjusted parameters
-    mesh = model.extract_mesh(
-        scene_codes, 
-        True, 
-        resolution=mc_resolution,
-        texture_quality=texture_quality/10.0  # Normalize to 0.1-1.0 range
-    )[0]
-    
-    # Apply mesh smoothing if needed
-    if smoothing_factor > 0:
-        mesh = mesh.smoothed(factor=smoothing_factor)
-    
-    mesh = to_gradio_3d_orientation(mesh)
-    
-    # Load reference model if provided
-    ground_truth_mesh = None
-    if reference_model is not None:
-        try:
-            ground_truth_mesh = trimesh.load(reference_model.name)
-            logging.info(f"Loaded reference model: {reference_model.name}")
-        except Exception as e:
-            logging.error(f"Error loading reference model: {str(e)}")
-    
-    # Calculate evaluation metrics
-    metrics = calculate_metrics(mesh, ground_truth_mesh)
-    
-    # Export meshes
-    rv = []
-    for format in formats:
-        mesh_path = tempfile.NamedTemporaryFile(suffix=f".{format}", delete=False)
-        mesh.export(mesh_path.name)
-        rv.append(mesh_path.name)
-    
-    # Format metrics for display
-    metrics_text = (
-        f"F1-Score: {metrics['f1_score']:.3f}\n"
-        f"Chamfer Distance: {metrics['chamfer_distance']:.3f}\n"
-        f"IoU Score: {metrics['iou_score']:.3f}\n\n"
-        f"Mesh Quality Metrics:\n"
-        f"- Vertices: {metrics['vertices']}\n"
-        f"- Faces: {metrics['faces']}\n"
-        f"- Watertight: {'Yes' if metrics['watertight'] > 0.5 else 'No'}\n"
-        f"- Regularity: {metrics['regularity']:.3f}\n"
-        f"- Area Uniformity: {metrics['area_uniformity']:.3f}\n"
-        f"- Generation Settings: {model_quality} quality, {mc_resolution} resolution"
-    )
-    
-    comparison_note = "\n\nNote: Using estimated metrics (no reference model provided)" if ground_truth_mesh is None else "\n\nNote: Using comparison against reference model"
-    metrics_text += comparison_note
-    
-    # Add metrics to return values
-    rv.extend([
-        metrics["f1_score"],
-        metrics["chamfer_distance"],
-        metrics["iou_score"],
-        metrics_text
-    ])
-    
-    return rv
+    try:
+        # Clear CUDA cache before starting
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            
+        # Map model quality to internal settings
+        quality_settings = {
+            "Draft": {"chunk_size": 16384, "detail_factor": 0.7},
+            "Standard": {"chunk_size": 8192, "detail_factor": 1.0},
+            "High": {"chunk_size": 4096, "detail_factor": 1.3}
+        }
+        
+        # Apply settings based on model quality
+        model.renderer.set_chunk_size(quality_settings[model_quality]["chunk_size"])
+        detail_factor = quality_settings[model_quality]["detail_factor"]
+        
+        # Generate scene codes with adjusted parameters
+        scene_codes = model(image, device=device)
+        
+        # Extract mesh with adjusted parameters - removed texture_quality parameter
+        mesh = model.extract_mesh(
+            scene_codes, 
+            True, 
+            resolution=mc_resolution
+        )[0]
+        
+        # Apply mesh smoothing if needed
+        if smoothing_factor > 0:
+            mesh = mesh.smoothed(factor=smoothing_factor)
+        
+        mesh = to_gradio_3d_orientation(mesh)
+        
+        # Load reference model if provided
+        ground_truth_mesh = None
+        if reference_model is not None:
+            try:
+                ground_truth_mesh = trimesh.load(reference_model.name)
+                logging.info(f"Loaded reference model: {reference_model.name}")
+            except Exception as e:
+                logging.error(f"Error loading reference model: {str(e)}")
+        
+        # Calculate evaluation metrics
+        metrics = calculate_metrics(mesh, ground_truth_mesh)
+        
+        # Export meshes
+        rv = []
+        for format in formats:
+            mesh_path = tempfile.NamedTemporaryFile(suffix=f".{format}", delete=False)
+            mesh.export(mesh_path.name)
+            rv.append(mesh_path.name)
+        
+        # Format metrics for display
+        metrics_text = (
+            f"F1-Score: {metrics['f1_score']:.3f}\n"
+            f"Chamfer Distance: {metrics['chamfer_distance']:.3f}\n"
+            f"IoU Score: {metrics['iou_score']:.3f}\n\n"
+            f"Mesh Quality Metrics:\n"
+            f"- Vertices: {metrics['vertices']}\n"
+            f"- Faces: {metrics['faces']}\n"
+            f"- Watertight: {'Yes' if metrics['watertight'] > 0.5 else 'No'}\n"
+            f"- Regularity: {metrics['regularity']:.3f}\n"
+            f"- Area Uniformity: {metrics['area_uniformity']:.3f}\n"
+            f"- Generation Settings: {model_quality} quality, {mc_resolution} resolution"
+        )
+        
+        comparison_note = "\n\nNote: Using estimated metrics (no reference model provided)" if ground_truth_mesh is None else "\n\nNote: Using comparison against reference model"
+        metrics_text += comparison_note
+        
+        # Add metrics to return values
+        rv.extend([
+            metrics["f1_score"],
+            metrics["chamfer_distance"],
+            metrics["iou_score"],
+            metrics_text
+        ])
+        
+        # Clear CUDA cache after processing
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            
+        return rv
+    except RuntimeError as e:
+        if "CUDA out of memory" in str(e):
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            raise gr.Error("GPU out of memory. Try using a lower resolution or 'Draft' quality setting.")
+        else:
+            raise gr.Error(f"Error generating model: {str(e)}")
+    except Exception as e:
+        raise gr.Error(f"Error: {str(e)}")
 
 
 def run_example(image_pil):
     preprocessed = preprocess(image_pil, False, 0.9)
     mesh_obj, mesh_glb, f1, cd, iou, metrics_text = generate(
-        preprocessed, 256, None, ["obj", "glb"], 
+        preprocessed, 128, None, ["obj", "glb"],  # Reduced from 256 to 128
         "Standard", 7, 0.3  # Default values for the new parameters
     )
     return preprocessed, mesh_obj, mesh_glb, f1, cd, iou, metrics_text
@@ -199,8 +220,8 @@ Upload an image to generate a 3D model with customizable parameters.
                     mc_resolution = gr.Slider(
                         label="Marching Cubes Resolution",
                         minimum=32,
-                        maximum=512,
-                        value=256,
+                        maximum=256,
+                        value=128,
                         step=32,
                         info="Higher resolution creates more detailed models but uses more memory"
                     )
