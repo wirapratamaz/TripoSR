@@ -123,15 +123,30 @@ def generate(image, mc_resolution, reference_model=None, formats=["obj", "glb"],
         mesh = to_gradio_3d_orientation(mesh)
         mesh = fix_model_orientation(mesh)
         
-        # Calculate metrics
+        # Load reference model if provided
         reference_mesh = None
         if reference_model is not None:
-            try:
-                reference_mesh = trimesh.load(reference_model)
-            except Exception as e:
-                logging.warning(f"Failed to load reference model: {str(e)}")
+            reference_mesh = trimesh.load(reference_model.name)
         
+        # Calculate actual metrics
         metrics = calculate_metrics(mesh, reference_mesh)
+        
+        # Format metrics text
+        if reference_mesh is not None:
+            metrics_text = (
+                f"Metrics (compared to reference model):\n"
+                f"F1 Score: {metrics['f1_score']:.4f}\n"
+                f"Chamfer Distance: {metrics['chamfer_distance']:.4f}\n"
+                f"IoU Score: {metrics['iou_score']:.4f}"
+            )
+        else:
+            metrics_text = (
+                f"Self-evaluation metrics:\n"
+                f"F1 Score: {metrics['f1_score']:.4f}\n"
+                f"Chamfer Distance: {metrics['chamfer_distance']:.4f}\n"
+                f"IoU Score: {metrics['iou_score']:.4f}\n"
+                f"Note: For more accurate metrics, provide a reference model."
+            )
         
         # Save files with permanent paths
         rv = []
@@ -152,7 +167,7 @@ def generate(image, mc_resolution, reference_model=None, formats=["obj", "glb"],
             metrics["f1_score"],
             metrics["chamfer_distance"],
             metrics["iou_score"],
-            f"F1: {metrics['f1_score']:.4f}\nCD: {metrics['chamfer_distance']:.4f}\nIoU: {metrics['iou_score']:.4f}"
+            metrics_text
         ])
         
         if torch.cuda.is_available():
