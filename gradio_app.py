@@ -229,7 +229,7 @@ Upload an image to generate a 3D model with customizable parameters.
                     reference_model = gr.File(
                         label="Reference Model (Optional)",
                         file_types=[".obj", ".glb", ".stl"],
-                        type="file"
+                        type="filepath"
                     )
             with gr.Row():
                 submit = gr.Button("Generate", elem_id="generate", variant="primary")
