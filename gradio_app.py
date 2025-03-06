@@ -102,10 +102,8 @@ def generate(image, mc_resolution, reference_model=None, formats=["obj", "glb"],
         output_dir = os.path.join(os.getcwd(), "outputs")
         os.makedirs(output_dir, exist_ok=True)
         
-        # Generate timestamp for unique filenames
         timestamp = time.strftime("%Y%m%d_%H%M%S")
         
-        # Quality settings remain the same
         quality_settings = {
             "Konsep": {"chunk_size": 32768, "detail_factor": 0.5},
             "Standar": {"chunk_size": 16384, "detail_factor": 0.7},
@@ -125,6 +123,16 @@ def generate(image, mc_resolution, reference_model=None, formats=["obj", "glb"],
         mesh = to_gradio_3d_orientation(mesh)
         mesh = fix_model_orientation(mesh)
         
+        # Calculate metrics
+        reference_mesh = None
+        if reference_model is not None:
+            try:
+                reference_mesh = trimesh.load(reference_model)
+            except Exception as e:
+                logging.warning(f"Failed to load reference model: {str(e)}")
+        
+        metrics = calculate_metrics(mesh, reference_mesh)
+        
         # Save files with permanent paths
         rv = []
         for format in formats:
@@ -139,7 +147,13 @@ def generate(image, mc_resolution, reference_model=None, formats=["obj", "glb"],
                 )
             rv.append(file_path)
         
-        rv.extend([0.0, 0.0, 0.0, "Processing complete"])
+        # Add metrics to return values
+        rv.extend([
+            metrics["f1_score"],
+            metrics["chamfer_distance"],
+            metrics["iou_score"],
+            f"F1: {metrics['f1_score']:.4f}\nCD: {metrics['chamfer_distance']:.4f}\nIoU: {metrics['iou_score']:.4f}"
+        ])
         
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
