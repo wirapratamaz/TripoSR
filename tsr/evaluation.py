@@ -199,6 +199,131 @@ def analyze_mesh_quality(mesh: trimesh.Trimesh) -> Dict[str, float]:
         "regularity": regularity
     }
 
+def calculate_uniform_hausdorff_distance(predicted_points: np.ndarray, ground_truth_points: np.ndarray) -> float:
+    """
+    Calculate Uniform Hausdorff Distance between predicted mesh points and ground truth points
+    
+    Args:
+        predicted_points: Points from the predicted mesh
+        ground_truth_points: Points from the ground truth mesh
+        
+    Returns:
+        float: Uniform Hausdorff Distance (lower is better)
+    """
+    if ground_truth_points is None or len(ground_truth_points) == 0:
+        # Calculate self-similarity using point subsets
+        n_points = len(predicted_points)
+        subset_size = n_points // 2
+        
+        subset1 = predicted_points[:subset_size]
+        subset2 = predicted_points[subset_size:2*subset_size]
+        
+        return calculate_uniform_hausdorff_distance(subset1, subset2)
+    
+    # Calculate distances from predicted to ground truth
+    max_dist_p2g = 0
+    for pred_point in predicted_points:
+        min_dist = float('inf')
+        for gt_point in ground_truth_points:
+            dist = np.linalg.norm(pred_point - gt_point)
+            if dist < min_dist:
+                min_dist = dist
+        max_dist_p2g = max(max_dist_p2g, min_dist)
+    
+    # Calculate distances from ground truth to predicted
+    max_dist_g2p = 0
+    for gt_point in ground_truth_points:
+        min_dist = float('inf')
+        for pred_point in predicted_points:
+            dist = np.linalg.norm(gt_point - pred_point)
+            if dist < min_dist:
+                min_dist = dist
+        max_dist_g2p = max(max_dist_g2p, min_dist)
+    
+    # Uniform Hausdorff Distance is the maximum of the two directed distances
+    uhd = max(max_dist_p2g, max_dist_g2p)
+    return uhd
+
+def calculate_tangent_space_mean_distance(predicted_mesh: trimesh.Trimesh, ground_truth_mesh: trimesh.Trimesh) -> float:
+    """
+    Calculate Tangent-Space Mean Distance between predicted mesh and ground truth mesh
+    
+    Args:
+        predicted_mesh: Predicted trimesh object
+        ground_truth_mesh: Ground truth trimesh object
+        
+    Returns:
+        float: Tangent-Space Mean Distance (lower is better)
+    """
+    if ground_truth_mesh is None:
+        # Calculate self-similarity using mesh analysis
+        # Compare to a simplified version of itself
+        simplified_mesh = predicted_mesh.simplify_quadratic_decimation(
+            face_count=len(predicted_mesh.faces) // 2
+        )
+        
+        return calculate_tangent_space_mean_distance(predicted_mesh, simplified_mesh)
+    
+    try:
+        # Sample points and normals from both meshes
+        n_points = 2000
+        
+        # Sample points from predicted mesh with normals
+        pred_points, pred_face_idx = predicted_mesh.sample(n_points, return_index=True)
+        pred_normals = predicted_mesh.face_normals[pred_face_idx]
+        
+        # Sample points from ground truth mesh with normals
+        gt_points, gt_face_idx = ground_truth_mesh.sample(n_points, return_index=True)
+        gt_normals = ground_truth_mesh.face_normals[gt_face_idx]
+        
+        # Calculate tangent-space distance from predicted to ground truth
+        p2g_distances = []
+        for i, pred_point in enumerate(pred_points):
+            min_tangent_dist = float('inf')
+            pred_normal = pred_normals[i]
+            
+            for j, gt_point in enumerate(gt_points):
+                # Vector from predicted to ground truth point
+                displacement = gt_point - pred_point
+                
+                # Calculate tangential component (perpendicular to normal)
+                projection = np.dot(displacement, pred_normal)
+                tangential_component = displacement - projection * pred_normal
+                tangent_dist = np.linalg.norm(tangential_component)
+                
+                if tangent_dist < min_tangent_dist:
+                    min_tangent_dist = tangent_dist
+            
+            p2g_distances.append(min_tangent_dist)
+        
+        # Calculate tangent-space distance from ground truth to predicted
+        g2p_distances = []
+        for i, gt_point in enumerate(gt_points):
+            min_tangent_dist = float('inf')
+            gt_normal = gt_normals[i]
+            
+            for j, pred_point in enumerate(pred_points):
+                # Vector from ground truth to predicted point
+                displacement = pred_point - gt_point
+                
+                # Calculate tangential component (perpendicular to normal)
+                projection = np.dot(displacement, gt_normal)
+                tangential_component = displacement - projection * gt_normal
+                tangent_dist = np.linalg.norm(tangential_component)
+                
+                if tangent_dist < min_tangent_dist:
+                    min_tangent_dist = tangent_dist
+            
+            g2p_distances.append(min_tangent_dist)
+        
+        # TMD is the mean of both directions
+        tmd = (np.mean(p2g_distances) + np.mean(g2p_distances)) / 2
+        return tmd
+    
+    except Exception as e:
+        logging.error(f"Error calculating TMD: {str(e)}")
+        return 0.0
+
 def calculate_metrics(predicted_mesh: trimesh.Trimesh, ground_truth_mesh: Optional[trimesh.Trimesh] = None) -> Dict[str, float]:
     """
     Calculate evaluation metrics for the generated 3D mesh
@@ -208,7 +333,7 @@ def calculate_metrics(predicted_mesh: trimesh.Trimesh, ground_truth_mesh: Option
         ground_truth_mesh: Optional reference mesh for comparison
         
     Returns:
-        dict: Dictionary containing F1, CD, and IoU scores
+        dict: Dictionary containing UHD, TMD, CD, and IoU scores
     """
     # Extract points from meshes for point-based metrics
     n_points = 2000  # Number of points to sample
@@ -219,7 +344,8 @@ def calculate_metrics(predicted_mesh: trimesh.Trimesh, ground_truth_mesh: Option
         ground_truth_points = ground_truth_mesh.sample(n_points)
     
     # Calculate comparison metrics if ground truth is available
-    f1 = calculate_f1_score(predicted_points, ground_truth_points if ground_truth_mesh else None)
+    uhd = calculate_uniform_hausdorff_distance(predicted_points, ground_truth_points if ground_truth_mesh else None)
+    tmd = calculate_tangent_space_mean_distance(predicted_mesh, ground_truth_mesh)
     cd = calculate_chamfer_distance(predicted_points, ground_truth_points if ground_truth_mesh else None)
     iou = calculate_iou(predicted_mesh, ground_truth_mesh)
     
@@ -229,7 +355,8 @@ def calculate_metrics(predicted_mesh: trimesh.Trimesh, ground_truth_mesh: Option
     
     # Combine all metrics
     metrics = {
-        "f1_score": f1,
+        "uniform_hausdorff_distance": uhd,
+        "tangent_space_mean_distance": tmd,
         "chamfer_distance": cd,
         "iou_score": iou,
         "vertices": complexity["vertices"],

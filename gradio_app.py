@@ -135,14 +135,16 @@ def generate(image, mc_resolution, reference_model=None, formats=["obj", "glb"],
         if reference_mesh is not None:
             metrics_text = (
                 f"Metrics (compared to reference model):\n"
-                f"F1 Score: {metrics['f1_score']:.4f}\n"
+                f"Uniform Hausdorff Distance: {metrics['uniform_hausdorff_distance']:.4f}\n"
+                f"Tangent-Space Mean Distance: {metrics['tangent_space_mean_distance']:.4f}\n"
                 f"Chamfer Distance: {metrics['chamfer_distance']:.4f}\n"
                 f"IoU Score: {metrics['iou_score']:.4f}"
             )
         else:
             metrics_text = (
                 f"Self-evaluation metrics:\n"
-                f"F1 Score: {metrics['f1_score']:.4f}\n"
+                f"Uniform Hausdorff Distance: {metrics['uniform_hausdorff_distance']:.4f}\n"
+                f"Tangent-Space Mean Distance: {metrics['tangent_space_mean_distance']:.4f}\n"
                 f"Chamfer Distance: {metrics['chamfer_distance']:.4f}\n"
                 f"IoU Score: {metrics['iou_score']:.4f}\n"
                 f"Note: For more accurate metrics, provide a reference model."
@@ -164,7 +166,8 @@ def generate(image, mc_resolution, reference_model=None, formats=["obj", "glb"],
         
         # Add metrics to return values
         rv.extend([
-            metrics["f1_score"],
+            metrics["uniform_hausdorff_distance"],
+            metrics["tangent_space_mean_distance"],
             metrics["chamfer_distance"],
             metrics["iou_score"],
             metrics_text
@@ -187,11 +190,11 @@ def generate(image, mc_resolution, reference_model=None, formats=["obj", "glb"],
 
 def run_example(image_pil):
     preprocessed = preprocess(image_pil, False, 0.9)
-    mesh_obj, mesh_glb, f1, cd, iou, metrics_text = generate(
+    mesh_obj, mesh_glb, uhd, tmd, cd, iou, metrics_text = generate(
         preprocessed, 128, None, ["obj", "glb"],
         "Standar", 7, 0.3
     )
-    return preprocessed, mesh_obj, mesh_glb, f1, cd, iou, metrics_text
+    return preprocessed, mesh_obj, mesh_glb, uhd, tmd, cd, iou, metrics_text
 
 
 with gr.Blocks(title="Generasi Model 3D") as interface:
@@ -297,9 +300,25 @@ Unggah gambar untuk menghasilkan model 3D dengan parameter yang dapat disesuaika
                         interactive=False
                     )
                     with gr.Row():
-                        f1_score = gr.Number(label="F1-Score", value=0.0, interactive=False)
-                        chamfer_dist = gr.Number(label="Chamfer Distance", value=0.0, interactive=False)
-                        iou_score = gr.Number(label="IoU Score", value=0.0, interactive=False)
+                        uhd_metric = gr.Number(label="Uniform Hausdorff Distance", value=0.0, precision=4)
+                        tmd_metric = gr.Number(label="Tangent-Space Mean Distance", value=0.0, precision=4)
+                        cd_metric = gr.Number(label="Chamfer Distance", value=0.0, precision=4)
+                        iou_metric = gr.Number(label="IoU Score", value=0.0, precision=4)
+            with gr.Accordion("Metrik Evaluasi", open=False):
+                metrics_text = gr.Textbox(
+                    label="Metrik Lengkap", 
+                    value="Hasilkan model untuk melihat metrik evaluasi.\n\nUntuk perbandingan yang lebih akurat, unggah model referensi.",
+                    lines=6
+                )
+                gr.Markdown("""
+                **Petunjuk Metrik:**
+                - **Uniform Hausdorff Distance (UHD)**: Mengukur jarak maksimum antara permukaan mesh. Nilai lebih rendah menunjukkan kesamaan bentuk yang lebih baik.
+                - **Tangent-Space Mean Distance (TMD)**: Mengukur jarak rata-rata pada ruang tangensial. Nilai lebih rendah menunjukkan kesamaan bentuk lokal yang lebih baik.
+                - **Chamfer Distance (CD)**: Mengukur jarak rata-rata antar titik. Nilai lebih rendah menunjukkan kecocokan bentuk yang lebih baik.
+                - **IoU Score**: Mengukur volume tumpang tindih. Nilai lebih tinggi (0-1) menunjukkan kesamaan volume yang lebih baik.
+                
+                Untuk metrik evaluasi yang akurat, unggah model referensi.
+                """)
     with gr.Row(variant="panel"):
         gr.Examples(
             examples=[
@@ -309,7 +328,7 @@ Unggah gambar untuk menghasilkan model 3D dengan parameter yang dapat disesuaika
                 "examples/pintu-belok.png",
             ],
             inputs=[input_image],
-            outputs=[processed_image, output_model_obj, output_model_glb, f1_score, chamfer_dist, iou_score, evaluation_box],
+            outputs=[processed_image, output_model_obj, output_model_glb, uhd_metric, tmd_metric, cd_metric, iou_metric, evaluation_box],
             cache_examples=False,
             fn=partial(run_example),
             label="Contoh",
@@ -320,8 +339,7 @@ Unggah gambar untuk menghasilkan model 3D dengan parameter yang dapat disesuaika
     evaluation_info_md = gr.Markdown(visible=False)
     
     def show_evaluation_info():
-        with open("evaluation_metrics.md", "r") as f:
-            return f.read()
+        return gr.Markdown.update(visible=True), gr.Markdown.update(visible=False)
     
     evaluation_info.click(
         fn=show_evaluation_info,
@@ -334,11 +352,30 @@ Unggah gambar untuk menghasilkan model 3D dengan parameter yang dapat disesuaika
         inputs=[input_image, do_remove_background, foreground_ratio],
         outputs=[processed_image],
     ).success(
-        fn=lambda img, res, ref, qual, tex, smooth: generate(
-            img, res, ref, ["obj", "glb"], qual, tex, smooth
-        ),
-        inputs=[processed_image, mc_resolution, reference_model, model_quality, texture_quality, smoothing_factor],
-        outputs=[output_model_obj, output_model_glb, f1_score, chamfer_dist, iou_score, evaluation_box],
+        fn=lambda img, rb, fr, mc, rm, mq, tq, sf: 
+            generate(
+                preprocess(img, rb, fr),
+                mc, rm, ["obj", "glb"], mq, tq, sf
+            ),
+        inputs=[
+            input_image, 
+            do_remove_background, 
+            foreground_ratio,
+            mc_resolution,
+            reference_model,
+            model_quality,
+            texture_quality,
+            smoothing_factor
+        ],
+        outputs=[
+            output_model_obj, 
+            output_model_glb,
+            uhd_metric,
+            tmd_metric,
+            cd_metric,
+            iou_metric,
+            metrics_text
+        ]
     )
 
 
