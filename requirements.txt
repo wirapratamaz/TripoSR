@@ -11,3 +11,4 @@ gradio
 xatlas==0.0.9
 moderngl==5.10.0
 scipy>=1.11.0
+plotly>=5.14.0
