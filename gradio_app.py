@@ -273,7 +273,6 @@ def generate(image, mc_resolution, reference_model=None, formats=["obj", "glb"],
                 f"Tangent-Space Mean Distance: {metrics['tangent_space_mean_distance']:.4f}\n"
                 f"Chamfer Distance: {metrics['chamfer_distance']:.4f}\n"
                 f"IoU Score: {metrics['iou_score']:.4f}\n"
-                f"Note: For more accurate metrics, provide a reference model."
             )
         
         # Save files with permanent paths
@@ -409,11 +408,6 @@ Unggah gambar untuk menghasilkan model 3D dengan parameter yang dapat disesuaika
                     evaluation_info = gr.Button("ℹ️ Informasi Metrik", size="sm")
         
         with gr.Column():
-            evaluation_box = gr.Textbox(
-                label="Status", 
-                value="Klik 'Generate 3D Model' untuk memulai.",
-                lines=2
-            )
             with gr.Tabs():
                 with gr.TabItem("Visualisasi 3D"):
                     output_model_obj = gr.Model3D(
@@ -465,7 +459,6 @@ Unggah gambar untuk menghasilkan model 3D dengan parameter yang dapat disesuaika
                     - **Chamfer Distance (CD)**: Mengukur jarak rata-rata antar titik. Nilai lebih rendah menunjukkan kecocokan bentuk yang lebih baik.
                     - **IoU Score**: Mengukur volume tumpang tindih. Nilai lebih tinggi (0-1) menunjukkan kesamaan volume yang lebih baik.
                     
-                    Untuk metrik evaluasi yang akurat, unggah model referensi.
                     """)
     
     with gr.Row(variant="panel"):
