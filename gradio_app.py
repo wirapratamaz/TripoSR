@@ -492,185 +492,122 @@ Unggah gambar untuk menghasilkan model 3D dengan parameter yang dapat disesuaika
 4. Nonaktifkan opsi "Hapus Latar Belakang" hanya jika gambar input Anda adalah RGBA dengan latar belakang transparan, konten gambar terpusat dan menempati lebih dari 70% lebar atau tinggi gambar.
 5. Untuk metrik evaluasi yang akurat, unggah model referensi dalam format OBJ, GLB atau STL.
 6. Waktu pemrosesan meningkat dengan pengaturan resolusi dan kualitas yang lebih tinggi.
-7. Gunakan tab "Batch Processing" untuk unggah dan proses beberapa gambar secara berurutan.
     """
     )
     
-    with gr.Tabs() as main_tabs:
-        with gr.TabItem("Single Image Processing"):
-            with gr.Row(variant="panel"):
-                with gr.Column():
-                    with gr.Row():
-                        input_image = gr.Image(
-                            label="Gambar Input",
-                            image_mode="RGBA",
-                            sources="upload",
-                            type="pil",
-                            elem_id="content_image",
+    with gr.Row(variant="panel"):
+        with gr.Column():
+            with gr.Row():
+                input_image = gr.Image(
+                    label="Unggah Gambar Disini",
+                    image_mode="RGBA",
+                    sources="upload",
+                    type="pil",
+                    elem_id="content_image",
+                )
+                processed_image = gr.Image(label="Processed Image", interactive=False)
+            with gr.Row():
+                with gr.Group():
+                    do_remove_background = gr.Checkbox(
+                        label="Hapus Latar Belakang", value=True
+                    )
+                    foreground_ratio = gr.Slider(
+                        minimum=0.5,
+                        maximum=1.0,
+                        value=0.9,
+                        step=0.05,
+                        label="Foreground Ratio",
+                    )
+                    mc_resolution = gr.Slider(
+                        minimum=64,
+                        maximum=256,
+                        value=128,
+                        step=16,
+                        label="Resolusi Marching Cubes",
+                    )
+                    model_quality = gr.Dropdown(
+                        ["Draft", "Standard", "High"],
+                        value="Standard",
+                        label="Model Quality",
+                    )
+                    texture_quality = gr.Slider(
+                        minimum=1,
+                        maximum=10,
+                        value=7,
+                        step=1,
+                        label="Kualitas Tekstur",
+                    )
+                    smoothing_factor = gr.Slider(
+                        minimum=0.0,
+                        maximum=1.0,
+                        value=0.3,
+                        step=0.1,
+                        label="Mesh Smoothing",
+                    )
+                    reference_model = gr.File(
+                        label="Reference Model (OBJ/GLB/STL) [optional]", 
+                        file_types=[".obj", ".glb", ".stl"]
+                    )
+                    submit = gr.Button("Generate 3D Model", variant="primary")
+                    evaluation_info = gr.Button("ℹ️ Metric Information", size="sm")
+                
+            with gr.Column():
+                with gr.Tabs():
+                    with gr.TabItem("3D Visualization"):
+                        output_model_obj = gr.Model3D(
+                            label="Model 3D (OBJ)",
+                            interactive=False
                         )
-                        processed_image = gr.Image(label="Processed Image", interactive=False)
-                    with gr.Row():
-                        with gr.Group():
-                            do_remove_background = gr.Checkbox(
-                                label="Hapus Latar Belakang", value=True
-                            )
-                            foreground_ratio = gr.Slider(
-                                minimum=0.5,
-                                maximum=1.0,
-                                value=0.9,
-                                step=0.05,
-                                label="Foreground Ratio",
-                            )
-                            mc_resolution = gr.Slider(
-                                minimum=64,
-                                maximum=256,
-                                value=128,
-                                step=16,
-                                label="Resolusi Marching Cubes",
-                            )
-                            model_quality = gr.Dropdown(
-                                ["Draft", "Standard", "High"],
-                                value="Standard",
-                                label="Model Quality",
-                            )
-                            texture_quality = gr.Slider(
-                                minimum=1,
-                                maximum=10,
-                                value=7,
-                                step=1,
-                                label="Kualitas Tekstur",
-                            )
-                            smoothing_factor = gr.Slider(
-                                minimum=0.0,
-                                maximum=1.0,
-                                value=0.3,
-                                step=0.1,
-                                label="Mesh Smoothing",
-                            )
-                            reference_model = gr.File(
-                                label="Reference Model (OBJ/GLB/STL) [optional]", 
-                                file_types=[".obj", ".glb", ".stl"]
-                            )
-                            submit = gr.Button("Generate 3D Model", variant="primary")
-                            evaluation_info = gr.Button("ℹ️ Metric Information", size="sm")
-                
-                with gr.Column():
-                    with gr.Tabs():
-                        with gr.TabItem("3D Visualization"):
-                            output_model_obj = gr.Model3D(
-                                label="Model 3D (OBJ)",
-                                interactive=False
-                            )
-                            output_model_glb = gr.Model3D(
-                                label="Model 3D (GLB)",
-                                interactive=False
-                            )
-                        with gr.TabItem("Metrik Evaluasi"):
-                            with gr.Row():
-                                f1_metric = gr.Number(label="F1 Score", value=0.0, precision=4)
-                                uhd_metric = gr.Number(label="Uniform Hausdorff Distance", value=0.0, precision=4)
-                                tmd_metric = gr.Number(label="Tangent-Space Mean Distance", value=0.0, precision=4)
-                                cd_metric = gr.Number(label="Chamfer Distance", value=0.0, precision=4)
-                                iou_metric = gr.Number(label="IoU Score", value=0.0, precision=4)
-                            
-                            with gr.Row():
-                                metrics_text = gr.Textbox(
-                                    label="Metrik Lengkap", 
-                                    value="Hasilkan model untuk melihat metrik evaluasi.\n\nUntuk perbandingan yang lebih akurat, unggah model referensi.",
-                                    lines=6
-                                )
+                        output_model_glb = gr.Model3D(
+                            label="Model 3D (GLB)",
+                            interactive=False
+                        )
+                    with gr.TabItem("Metrik Evaluasi"):
+                        with gr.Row():
+                            f1_metric = gr.Number(label="F1 Score", value=0.0, precision=4)
+                            uhd_metric = gr.Number(label="Uniform Hausdorff Distance", value=0.0, precision=4)
+                            tmd_metric = gr.Number(label="Tangent-Space Mean Distance", value=0.0, precision=4)
+                            cd_metric = gr.Number(label="Chamfer Distance", value=0.0, precision=4)
+                            iou_metric = gr.Number(label="IoU Score", value=0.0, precision=4)
                         
-                        with gr.TabItem("Visualisasi Metrik"):
-                            gr.Markdown("""
-                            ### Visualisasi Perbandingan Metrik
-                            
-                            Diagram di bawah menunjukkan perbandingan metrik model saat ini dengan rata-rata historis.
-                            Semakin besar nilai pada diagram radar, semakin baik kualitas metrik tersebut.
-                            """)
-                            with gr.Row():
-                                radar_plot = gr.Plot(label="Perbandingan dengan Riwayat", show_label=False)
-                            
-                            gr.Markdown("""
-                            ### Nilai Metrik Saat Ini
-                            
-                            Diagram batang di bawah menunjukkan nilai absolut dari metrik saat ini.
-                            UHD, TMD, CD: nilai lebih rendah lebih baik (↓)
-                            IoU: nilai lebih tinggi lebih baik (↑)
-                            """)
-                            with gr.Row():
-                                bar_plot = gr.Plot(label="Nilai Metrik Saat Ini", show_label=False)
-                            
-                            gr.Markdown("""
-                            **Petunjuk Metrik:**
-                            - **F1 Score**: Mengukur keseimbangan antara presisi dan recall. Nilai lebih tinggi (0-1) menunjukkan kecocokan permukaan yang lebih baik.
-                            - **Uniform Hausdorff Distance (UHD)**: Mengukur jarak maksimum antara permukaan mesh. Nilai lebih rendah menunjukkan kesamaan bentuk yang lebih baik.
-                            - **Tangent-Space Mean Distance (TMD)**: Mengukur jarak rata-rata pada ruang tangensial. Nilai lebih rendah menunjukkan kesamaan bentuk lokal yang lebih baik.
-                            - **Chamfer Distance (CD)**: Mengukur jarak rata-rata antar titik. Nilai lebih rendah menunjukkan kecocokan bentuk yang lebih baik.
-                            - **IoU Score**: Mengukur volume tumpang tindih. Nilai lebih tinggi (0-1) menunjukkan kesamaan volume yang lebih baik.
-                            
-                            Untuk metrik evaluasi yang akurat, unggah model referensi.
-                            """)
+                        with gr.Row():
+                            metrics_text = gr.Textbox(
+                                label="Metrik Lengkap", 
+                                value="Hasilkan model untuk melihat metrik evaluasi.\n\nUntuk perbandingan yang lebih akurat, unggah model referensi.",
+                                lines=6
+                            )
+                    
+                    with gr.TabItem("Visualisasi Metrik"):
+                        gr.Markdown("""
+                        ### Visualisasi Perbandingan Metrik
+                        
+                        Diagram di bawah menunjukkan perbandingan metrik model saat ini dengan rata-rata historis.
+                        Semakin besar nilai pada diagram radar, semakin baik kualitas metrik tersebut.
+                        """)
+                        with gr.Row():
+                            radar_plot = gr.Plot(label="Perbandingan dengan Riwayat", show_label=False)
+                        
+                        gr.Markdown("""
+                        ### Nilai Metrik Saat Ini
+                        
+                        Diagram batang di bawah menunjukkan nilai absolut dari metrik saat ini.
+                        UHD, TMD, CD: nilai lebih rendah lebih baik (↓)
+                        IoU: nilai lebih tinggi lebih baik (↑)
+                        """)
+                        with gr.Row():
+                            bar_plot = gr.Plot(label="Nilai Metrik Saat Ini", show_label=False)
+                        
+                        gr.Markdown("""
+                        **Petunjuk Metrik:**
+                        - **F1 Score**: Mengukur keseimbangan antara presisi dan recall. Nilai lebih tinggi (0-1) menunjukkan kecocokan permukaan yang lebih baik.
+                        - **Uniform Hausdorff Distance (UHD)**: Mengukur jarak maksimum antara permukaan mesh. Nilai lebih rendah menunjukkan kesamaan bentuk yang lebih baik.
+                        - **Tangent-Space Mean Distance (TMD)**: Mengukur jarak rata-rata pada ruang tangensial. Nilai lebih rendah menunjukkan kesamaan bentuk lokal yang lebih baik.
+                        - **Chamfer Distance (CD)**: Mengukur jarak rata-rata antar titik. Nilai lebih rendah menunjukkan kecocokan bentuk yang lebih baik.
+                        - **IoU Score**: Mengukur volume tumpang tindih. Nilai lebih tinggi (0-1) menunjukkan kesamaan volume yang lebih baik.
+                        
+                        Untuk metrik evaluasi yang akurat, unggah model referensi.
+                        """)
         
-        with gr.TabItem("Batch Processing"):
-            with gr.Row(variant="panel"):
-                with gr.Column():
-                    batch_input_images = gr.File(
-                        label="Upload Multiple Images (5-10 recommended)",
-                        file_count="multiple",
-                        file_types=["image"],
-                    )
-                    with gr.Row():
-                        with gr.Group():
-                            batch_do_remove_background = gr.Checkbox(
-                                label="Hapus Latar Belakang", value=True
-                            )
-                            batch_foreground_ratio = gr.Slider(
-                                minimum=0.5,
-                                maximum=1.0,
-                                value=0.9,
-                                step=0.05,
-                                label="Foreground Ratio",
-                            )
-                            batch_mc_resolution = gr.Slider(
-                                minimum=64,
-                                maximum=256,
-                                value=128,
-                                step=16,
-                                label="Resolusi Marching Cubes",
-                            )
-                            batch_model_quality = gr.Dropdown(
-                                ["Draft", "Standard", "High"],
-                                value="Standard",
-                                label="Model Quality",
-                            )
-                            batch_texture_quality = gr.Slider(
-                                minimum=1,
-                                maximum=10,
-                                value=7,
-                                step=1,
-                                label="Kualitas Tekstur",
-                            )
-                            batch_smoothing_factor = gr.Slider(
-                                minimum=0.0,
-                                maximum=1.0,
-                                value=0.3,
-                                step=0.1,
-                                label="Mesh Smoothing",
-                            )
-                            batch_submit = gr.Button("Process All Images", variant="primary")
-                
-                with gr.Column():
-                    batch_gallery = gr.Gallery(
-                        label="Processed Images",
-                        show_label=True,
-                        elem_id="gallery",
-                        columns=2,
-                        rows=2,
-                        height="auto"
-                    )
-                    batch_results = gr.JSON(label="Batch Processing Results")
-                    batch_download_all = gr.Button("Download All Models (ZIP)", variant="secondary")
-    
     with gr.Row(variant="panel"):
         gr.Examples(
             examples=[
@@ -729,64 +666,6 @@ Unggah gambar untuk menghasilkan model 3D dengan parameter yang dapat disesuaika
             radar_plot,
             bar_plot,
         ],
-    )
-    
-    # Set up the event handlers for batch processing
-    batch_submit.click(
-        fn=process_multiple_images,
-        inputs=[
-            batch_input_images,
-            batch_mc_resolution,
-            batch_do_remove_background,
-            batch_foreground_ratio,
-            batch_model_quality,
-            batch_texture_quality,
-            batch_smoothing_factor,
-        ],
-        outputs=[
-            batch_gallery,
-            batch_results,
-        ],
-    )
-    
-    # Let's add a ZIP download function for batch results
-    def create_download_zip(results):
-        """Create a ZIP file of all generated models."""
-        import os
-        import zipfile
-        import tempfile
-        
-        if not results or len(results) == 0:
-            return None
-            
-        # Create a temporary directory
-        with tempfile.TemporaryDirectory() as temp_dir:
-            zip_path = os.path.join(temp_dir, "models.zip")
-            
-            # Create a ZIP file
-            with zipfile.ZipFile(zip_path, 'w') as zipf:
-                for i, result in enumerate(results):
-                    file_name = result.get("file_name", f"model_{i}")
-                    base_name = os.path.splitext(os.path.basename(file_name))[0]
-                    
-                    # Add OBJ file
-                    if "mesh_obj" in result and result["mesh_obj"]:
-                        obj_path = result["mesh_obj"]
-                        if os.path.exists(obj_path):
-                            zipf.write(obj_path, f"{base_name}.obj")
-                    
-                    # Add GLB file
-                    if "mesh_glb" in result and result["mesh_glb"]:
-                        glb_path = result["mesh_glb"]
-                        if os.path.exists(glb_path):
-                            zipf.write(glb_path, f"{base_name}.glb")
-            
-            return zip_path
-    
-    batch_download_all.click(
-        fn=create_download_zip,
-        inputs=[batch_results],
-        outputs=[gr.File(label="Download All Models")]
     )
 
 
