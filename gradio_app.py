@@ -256,9 +256,15 @@ def generate(image, mc_resolution, reference_model=None, formats=["obj", "glb"],
         mesh = to_gradio_3d_orientation(mesh)
         mesh = fix_model_orientation(mesh)
         
-        # Apply smoothing if requested
+        # Apply smoothing if requested - using the proper method
         if smoothing_factor > 0:
-            mesh = mesh.smoothed(smoothing_factor)
+            # Using laplacian_smooth instead of smoothed with proper parameters
+            # This is the correct way to apply smoothing in trimesh
+            if hasattr(mesh, 'vertices') and len(mesh.vertices) > 0:
+                from trimesh import smoothing
+                # Apply laplacian smoothing with the specified factor as iterations
+                iterations = max(1, int(smoothing_factor * 10))  # Convert factor to iterations (1-10)
+                smoothing.filter_laplacian(mesh, iterations=iterations)
         
         # Improve texture appearance by normalizing colors
         if hasattr(mesh, 'visual') and hasattr(mesh.visual, 'vertex_colors'):
