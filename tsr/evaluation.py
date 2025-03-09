@@ -333,7 +333,7 @@ def calculate_metrics(predicted_mesh: trimesh.Trimesh, ground_truth_mesh: Option
         ground_truth_mesh: Optional reference mesh for comparison
         
     Returns:
-        dict: Dictionary containing UHD, TMD, CD, and IoU scores
+        dict: Dictionary containing F1, UHD, TMD, CD, and IoU scores
     """
     # Extract points from meshes for point-based metrics
     n_points = 2000  # Number of points to sample
@@ -344,6 +344,7 @@ def calculate_metrics(predicted_mesh: trimesh.Trimesh, ground_truth_mesh: Option
         ground_truth_points = ground_truth_mesh.sample(n_points)
     
     # Calculate comparison metrics if ground truth is available
+    f1 = calculate_f1_score(predicted_points, ground_truth_points if ground_truth_mesh else None)
     uhd = calculate_uniform_hausdorff_distance(predicted_points, ground_truth_points if ground_truth_mesh else None)
     tmd = calculate_tangent_space_mean_distance(predicted_mesh, ground_truth_mesh)
     cd = calculate_chamfer_distance(predicted_points, ground_truth_points if ground_truth_mesh else None)
@@ -355,6 +356,7 @@ def calculate_metrics(predicted_mesh: trimesh.Trimesh, ground_truth_mesh: Option
     
     # Combine all metrics
     metrics = {
+        "f1_score": f1,
         "uniform_hausdorff_distance": uhd,
         "tangent_space_mean_distance": tmd,
         "chamfer_distance": cd,

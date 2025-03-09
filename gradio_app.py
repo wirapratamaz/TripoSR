@@ -47,8 +47,9 @@ metrics_history = []
 
 def create_metrics_radar_chart(current_metrics):
     """Create a radar chart comparing the current metrics with historical averages"""
-    # Define metrics to show (lower is better for UHD, TMD, CD; higher is better for IoU)
+    # Define metrics to show (lower is better for UHD, TMD, CD; higher is better for IoU and F1)
     metrics_to_show = {
+        'f1_score': {'display': 'F1', 'invert': False},
         'uniform_hausdorff_distance': {'display': 'UHD', 'invert': True},
         'tangent_space_mean_distance': {'display': 'TMD', 'invert': True},
         'chamfer_distance': {'display': 'CD', 'invert': True},
@@ -132,6 +133,7 @@ def create_metrics_radar_chart(current_metrics):
 def create_metrics_bar_chart(current_metrics):
     """Create a bar chart for current metrics"""
     metrics_to_show = {
+        'f1_score': {'display': 'F1 Score (↑)', 'color': 'purple'},
         'uniform_hausdorff_distance': {'display': 'UHD (↓)', 'color': 'red'},
         'tangent_space_mean_distance': {'display': 'TMD (↓)', 'color': 'orange'},
         'chamfer_distance': {'display': 'CD (↓)', 'color': 'green'},
@@ -261,6 +263,7 @@ def generate(image, mc_resolution, reference_model=None, formats=["obj", "glb"],
         if reference_mesh is not None:
             metrics_text = (
                 f"Metrics (compared to reference model):\n"
+                f"F1 Score: {metrics['f1_score']:.4f}\n"
                 f"Uniform Hausdorff Distance: {metrics['uniform_hausdorff_distance']:.4f}\n"
                 f"Tangent-Space Mean Distance: {metrics['tangent_space_mean_distance']:.4f}\n"
                 f"Chamfer Distance: {metrics['chamfer_distance']:.4f}\n"
@@ -269,10 +272,12 @@ def generate(image, mc_resolution, reference_model=None, formats=["obj", "glb"],
         else:
             metrics_text = (
                 f"Self-evaluation metrics:\n"
+                f"F1 Score: {metrics['f1_score']:.4f}\n"
                 f"Uniform Hausdorff Distance: {metrics['uniform_hausdorff_distance']:.4f}\n"
                 f"Tangent-Space Mean Distance: {metrics['tangent_space_mean_distance']:.4f}\n"
                 f"Chamfer Distance: {metrics['chamfer_distance']:.4f}\n"
                 f"IoU Score: {metrics['iou_score']:.4f}\n"
+                f"Note: For more accurate metrics, provide a reference model."
             )
         
         # Save files with permanent paths
@@ -291,6 +296,7 @@ def generate(image, mc_resolution, reference_model=None, formats=["obj", "glb"],
         
         # Add metrics to return values
         rv.extend([
+            metrics["f1_score"],
             metrics["uniform_hausdorff_distance"],
             metrics["tangent_space_mean_distance"],
             metrics["chamfer_distance"],
@@ -317,11 +323,11 @@ def generate(image, mc_resolution, reference_model=None, formats=["obj", "glb"],
 
 def run_example(image_pil):
     preprocessed = preprocess(image_pil, False, 0.9)
-    mesh_obj, mesh_glb, uhd, tmd, cd, iou, metrics_text, radar_chart, bar_chart = generate(
+    mesh_obj, mesh_glb, f1, uhd, tmd, cd, iou, metrics_text, radar_chart, bar_chart = generate(
         preprocessed, 128, None, ["obj", "glb"],
         "Standar", 7, 0.3
     )
-    return preprocessed, mesh_obj, mesh_glb, uhd, tmd, cd, iou, metrics_text, radar_chart, bar_chart
+    return preprocessed, mesh_obj, mesh_glb, f1, uhd, tmd, cd, iou, metrics_text, radar_chart, bar_chart
 
 
 with gr.Blocks(title="Generasi Model 3D") as interface:
@@ -420,6 +426,7 @@ Unggah gambar untuk menghasilkan model 3D dengan parameter yang dapat disesuaika
                     )
                 with gr.TabItem("Metrik Evaluasi"):
                     with gr.Row():
+                        f1_metric = gr.Number(label="F1 Score", value=0.0, precision=4)
                         uhd_metric = gr.Number(label="Uniform Hausdorff Distance", value=0.0, precision=4)
                         tmd_metric = gr.Number(label="Tangent-Space Mean Distance", value=0.0, precision=4)
                         cd_metric = gr.Number(label="Chamfer Distance", value=0.0, precision=4)
@@ -454,11 +461,13 @@ Unggah gambar untuk menghasilkan model 3D dengan parameter yang dapat disesuaika
                     
                     gr.Markdown("""
                     **Petunjuk Metrik:**
+                    - **F1 Score**: Mengukur keseimbangan antara presisi dan recall. Nilai lebih tinggi (0-1) menunjukkan kecocokan permukaan yang lebih baik.
                     - **Uniform Hausdorff Distance (UHD)**: Mengukur jarak maksimum antara permukaan mesh. Nilai lebih rendah menunjukkan kesamaan bentuk yang lebih baik.
                     - **Tangent-Space Mean Distance (TMD)**: Mengukur jarak rata-rata pada ruang tangensial. Nilai lebih rendah menunjukkan kesamaan bentuk lokal yang lebih baik.
                     - **Chamfer Distance (CD)**: Mengukur jarak rata-rata antar titik. Nilai lebih rendah menunjukkan kecocokan bentuk yang lebih baik.
                     - **IoU Score**: Mengukur volume tumpang tindih. Nilai lebih tinggi (0-1) menunjukkan kesamaan volume yang lebih baik.
                     
+                    Untuk metrik evaluasi yang akurat, unggah model referensi.
                     """)
     
     with gr.Row(variant="panel"):
@@ -470,7 +479,7 @@ Unggah gambar untuk menghasilkan model 3D dengan parameter yang dapat disesuaika
                 "examples/pintu-belok.png",
             ],
             inputs=[input_image],
-            outputs=[processed_image, output_model_obj, output_model_glb, uhd_metric, tmd_metric, cd_metric, iou_metric, metrics_text, radar_plot, bar_plot],
+            outputs=[processed_image, output_model_obj, output_model_glb, f1_metric, uhd_metric, tmd_metric, cd_metric, iou_metric, metrics_text, radar_plot, bar_plot],
             cache_examples=False,
             fn=partial(run_example),
             label="Contoh",
@@ -512,6 +521,7 @@ Unggah gambar untuk menghasilkan model 3D dengan parameter yang dapat disesuaika
         outputs=[
             output_model_obj, 
             output_model_glb,
+            f1_metric,
             uhd_metric,
             tmd_metric,
             cd_metric,
