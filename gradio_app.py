@@ -206,6 +206,21 @@ def fix_model_orientation(mesh):
     scale = 1.0 / max(mesh.vertices.max(axis=0) - mesh.vertices.min(axis=0))
     mesh.vertices *= scale
     
+    # Fix normals to ensure proper rendering
+    mesh.fix_normals()
+    
+    # Ensure material properties aren't too reflective
+    if hasattr(mesh, 'visual') and hasattr(mesh.visual, 'material'):
+        # Reduce specularity to minimize bright reflections
+        if hasattr(mesh.visual.material, 'specular'):
+            mesh.visual.material.specular = [0.1, 0.1, 0.1, 1.0]
+        # Set ambient color to ensure better visibility
+        if hasattr(mesh.visual.material, 'ambient'):
+            mesh.visual.material.ambient = [0.6, 0.6, 0.6, 1.0]
+        # Adjust shininess to reduce glossy appearance
+        if hasattr(mesh.visual.material, 'shininess'):
+            mesh.visual.material.shininess = 0.1
+
     return mesh
 
 
@@ -240,6 +255,38 @@ def generate(image, mc_resolution, reference_model=None, formats=["obj", "glb"],
         
         mesh = to_gradio_3d_orientation(mesh)
         mesh = fix_model_orientation(mesh)
+        
+        # Apply smoothing if requested
+        if smoothing_factor > 0:
+            mesh = mesh.smoothed(smoothing_factor)
+        
+        # Improve texture appearance by normalizing colors
+        if hasattr(mesh, 'visual') and hasattr(mesh.visual, 'vertex_colors'):
+            # Get vertex colors
+            colors = mesh.visual.vertex_colors
+            
+            # Normalize brightness to prevent extreme bright spots
+            # Convert to HSV for better manipulation
+            import colorsys
+            normalized_colors = np.zeros_like(colors)
+            
+            for i in range(len(colors)):
+                r, g, b = colors[i][0]/255.0, colors[i][1]/255.0, colors[i][2]/255.0
+                h, s, v = colorsys.rgb_to_hsv(r, g, b)
+                
+                # Cap brightness (v) to prevent overly bright spots
+                v = min(v, 0.95)
+                
+                # Increase saturation slightly for better visual appeal
+                s = min(s * 1.1, 1.0)
+                
+                r, g, b = colorsys.hsv_to_rgb(h, s, v)
+                normalized_colors[i][0] = int(r * 255)
+                normalized_colors[i][1] = int(g * 255)
+                normalized_colors[i][2] = int(b * 255)
+                normalized_colors[i][3] = colors[i][3]  # Keep alpha channel
+            
+            mesh.visual.vertex_colors = normalized_colors
         
         # Load reference model if provided
         reference_mesh = None
@@ -287,10 +334,14 @@ def generate(image, mc_resolution, reference_model=None, formats=["obj", "glb"],
             if format == "glb":
                 mesh.export(file_path, file_type="glb")
             else:
+                # For OBJ, use improved texture settings
                 mesh.export(
                     file_path,
                     file_type="obj",
-                    include_texture=True
+                    include_texture=True,
+                    include_normals=True,  # Ensure normals are included for better rendering
+                    resolver=None,
+                    mtl_name=f"model_{timestamp}.mtl"
                 )
             rv.append(file_path)
         
