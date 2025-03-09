@@ -431,10 +431,12 @@ def process_multiple_images(upload_files, mc_resolution, do_remove_background, f
             preprocessed = preprocess(img, do_remove_background, foreground_ratio)
             processed_images.append(preprocessed)
             
-            # Generate 3D model
+            # Generate 3D model - removed formats parameter to use default
             mesh_obj, mesh_glb, f1, uhd, tmd, cd, iou, metrics_text, radar_chart, bar_chart = generate(
-                preprocessed, mc_resolution, None, ["obj", "glb"],
-                model_quality, texture_quality, smoothing_factor
+                preprocessed, mc_resolution, None,
+                model_quality=model_quality, 
+                texture_quality=texture_quality, 
+                smoothing_factor=smoothing_factor
             )
             
             # Add results to our list
@@ -711,7 +713,6 @@ Unggah gambar untuk menghasilkan model 3D dengan parameter yang dapat disesuaika
             processed_image,
             mc_resolution,
             reference_model,
-            lambda: ["obj", "glb"],
             model_quality,
             texture_quality,
             smoothing_factor,
