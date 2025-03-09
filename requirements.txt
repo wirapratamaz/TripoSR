@@ -1,5 +1,6 @@
 omegaconf==2.3.0
 Pillow==10.1.0
+python-PIL
 einops==0.7.0
 git+https://github.com/tatsy/torchmcubes.git
 transformers==4.35.0
