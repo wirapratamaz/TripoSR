@@ -711,7 +711,7 @@ Unggah gambar untuk menghasilkan model 3D dengan parameter yang dapat disesuaika
             processed_image,
             mc_resolution,
             reference_model,
-            gr.Literal(["obj", "glb"]),
+            lambda: ["obj", "glb"],
             model_quality,
             texture_quality,
             smoothing_factor,
