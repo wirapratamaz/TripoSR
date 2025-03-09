@@ -387,7 +387,7 @@ def run_example(image_pil):
     return preprocessed, mesh_obj, mesh_glb, f1, uhd, tmd, cd, iou, metrics_text, radar_chart, bar_chart
 
 
-with gr.Blocks(title="Generasi Model 3D") as interface:
+with gr.Blocks(title="3D Model Generation") as interface:
     gr.Markdown(
         """    
 # Generasi Model 3D dari Gambar
@@ -396,18 +396,18 @@ Unggah gambar untuk menghasilkan model 3D dengan parameter yang dapat disesuaika
 
 ## Fine-Tuning Parameters
 
-- **Rasio Latar Depan**: Mengontrol seberapa banyak gambar yang dianggap sebagai latar depan saat pemrosesan. Nilai lebih tinggi akan lebih fokus pada objek utama.
-- **Resolusi Marching Cubes**: Mengontrol tingkat detail mesh 3D. Nilai lebih tinggi menciptakan model lebih detail tetapi membutuhkan daya pemrosesan lebih besar.
+- **Foreground Ratio**: Mengontrol seberapa banyak gambar yang dianggap sebagai latar depan saat pemrosesan. Nilai lebih tinggi akan lebih fokus pada objek utama.
+- **Marching Cubes Resolution**: Mengontrol tingkat detail mesh 3D. Nilai lebih tinggi menciptakan model lebih detail tetapi membutuhkan daya pemrosesan lebih besar.
 - **Kualitas Model**: Mengatur tingkat kualitas keseluruhan, mempengaruhi waktu pemrosesan dan detail hasil:
   - Draft: Lebih cepat tapi kurang detail
   - Standar: Pilihan seimbang untuk kebanyakan kasus
   - Tinggi: Lebih detail tapi pemrosesan lebih lambat
 - **Kualitas Tekstur**: Mengontrol detail tekstur yang diterapkan pada model. Nilai lebih tinggi menciptakan tekstur lebih detail.
-- **Penghalusan Mesh**: Menerapkan penghalusan pada model akhir. Nilai lebih tinggi menciptakan permukaan lebih halus tapi mungkin kehilangan detail halus.
+- **Mesh Smoothing**: Menerapkan penghalusan pada model akhir. Nilai lebih tinggi menciptakan permukaan lebih halus tapi mungkin kehilangan detail halus.
 
 ## Tips:
-1. Jika hasil tidak memuaskan, coba sesuaikan parameter rasio latar depan dan penghalusan mesh.
-2. Untuk model lebih detail, tingkatkan Resolusi Marching Cubes dan atur Kualitas Model ke "Tinggi".
+1. Jika hasil tidak memuaskan, coba sesuaikan parameter Foreground Ratio dan Mesh Smoothing.
+2. Untuk model lebih detail, tingkatkan Marching Cubes Resolution dan atur Kualitas Model ke "Tinggi".
 3. Lebih baik nonaktifkan "Hapus Latar Belakang" untuk contoh yang disediakan (kecuali yang terakhir) karena sudah diproses sebelumnya.
 4. Nonaktifkan opsi "Hapus Latar Belakang" hanya jika gambar input Anda adalah RGBA dengan latar belakang transparan, konten gambar terpusat dan menempati lebih dari 70% lebar atau tinggi gambar.
 5. Untuk metrik evaluasi yang akurat, unggah model referensi dalam format OBJ, GLB atau STL.
@@ -424,7 +424,7 @@ Unggah gambar untuk menghasilkan model 3D dengan parameter yang dapat disesuaika
                     type="pil",
                     elem_id="content_image",
                 )
-                processed_image = gr.Image(label="Gambar Terproses", interactive=False)
+                processed_image = gr.Image(label="Processed Image", interactive=False)
             with gr.Row():
                 with gr.Group():
                     do_remove_background = gr.Checkbox(
@@ -435,7 +435,7 @@ Unggah gambar untuk menghasilkan model 3D dengan parameter yang dapat disesuaika
                         maximum=1.0,
                         value=0.9,
                         step=0.05,
-                        label="Rasio Latar Depan",
+                        label="Foreground Ratio",
                     )
                     mc_resolution = gr.Slider(
                         minimum=64,
@@ -445,9 +445,9 @@ Unggah gambar untuk menghasilkan model 3D dengan parameter yang dapat disesuaika
                         label="Resolusi Marching Cubes",
                     )
                     model_quality = gr.Dropdown(
-                        ["Konsep", "Standar", "Tinggi"],
-                        value="Standar",
-                        label="Kualitas Model",
+                        ["Draft", "Standard", "High"],
+                        value="Standard",
+                        label="Model Quality",
                     )
                     texture_quality = gr.Slider(
                         minimum=1,
@@ -461,18 +461,18 @@ Unggah gambar untuk menghasilkan model 3D dengan parameter yang dapat disesuaika
                         maximum=1.0,
                         value=0.3,
                         step=0.1,
-                        label="Penghalusan Mesh",
+                        label="Mesh Smoothing",
                     )
                     reference_model = gr.File(
-                        label="Model Referensi (OBJ/GLB/STL) [opsional]", 
+                        label="Reference Model (OBJ/GLB/STL) [optional]", 
                         file_types=[".obj", ".glb", ".stl"]
                     )
                     submit = gr.Button("Generate 3D Model", variant="primary")
-                    evaluation_info = gr.Button("ℹ️ Informasi Metrik", size="sm")
+                    evaluation_info = gr.Button("ℹ️ Metric Information", size="sm")
         
         with gr.Column():
             with gr.Tabs():
-                with gr.TabItem("Visualisasi 3D"):
+                with gr.TabItem("3D Visualization"):
                     output_model_obj = gr.Model3D(
                         label="Model 3D (OBJ)",
                         interactive=False
