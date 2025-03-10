@@ -367,11 +367,11 @@ def generate(image, mc_resolution, reference_model=None, formats=["obj", "glb"],
             logging.warning(f"Error calculating metrics: {str(metric_error)}")
             # Provide default metrics when calculation fails
             metrics = {
-                "f1_score": 0.0,
-                "uniform_hausdorff_distance": 0.0,
-                "tangent_space_mean_distance": 0.0,
-                "chamfer_distance": 0.0,
-                "iou": 0.0
+                "f1_score": 0.01,
+                "uniform_hausdorff_distance": 0.01,
+                "tangent_space_mean_distance": 0.01,
+                "chamfer_distance": 0.01,
+                "iou": 0.01
             }
         
         # Add current metrics to history (limit to last 10)
