@@ -378,7 +378,7 @@ def generate(image, mc_resolution, reference_model=None, formats=["obj", "glb"],
         if "CUDA out of memory" in str(e):
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
-            raise gr.Error("GPU memory error. Try 'Konsep' quality or lower resolution.")
+            raise gr.Error("GPU memory error. Try 'Standard' quality or lower resolution.")
         else:
             raise gr.Error(f"Generation error: {str(e)}")
     except Exception as e:
@@ -436,7 +436,7 @@ Unggah gambar untuk menghasilkan model 3D dengan parameter yang dapat disesuaika
             with gr.Row():
                 with gr.Group():
                     do_remove_background = gr.Checkbox(
-                        label="Hapus Latar Belakang", value=True
+                        label="Remove Background", value=True
                     )
                     foreground_ratio = gr.Slider(
                         minimum=0.5,
@@ -450,7 +450,7 @@ Unggah gambar untuk menghasilkan model 3D dengan parameter yang dapat disesuaika
                         maximum=256,
                         value=128,
                         step=16,
-                        label="Resolusi Marching Cubes",
+                        label="Marching Cubes Resolution",
                     )
                     model_quality = gr.Dropdown(
                         choices=["Draft", "Standard", "High"],
