@@ -432,20 +432,30 @@ def generate(image, mc_resolution, reference_model=None, formats=["obj", "glb"],
         # Save files with permanent paths
         rv = []
         for format in formats:
-            file_path = os.path.join(output_dir, f"model_{timestamp}.{format}")
-            if format == "glb":
-                mesh.export(file_path, file_type="glb")
-            else:
-                # For OBJ, use improved texture settings
-                mesh.export(
-                    file_path,
-                    file_type="obj",
-                    include_texture=True,
-                    include_normals=True,  # Ensure normals are included for better rendering
-                    resolver=None,
-                    mtl_name=f"model_{timestamp}.mtl"
-                )
-            rv.append(file_path)
+            try:
+                file_path = os.path.join(output_dir, f"model_{timestamp}.{format}")
+                # Make sure to use absolute path
+                abs_file_path = os.path.abspath(file_path)
+                
+                if format == "glb":
+                    mesh.export(abs_file_path, file_type="glb")
+                else:
+                    # For OBJ, use improved texture settings
+                    mesh.export(
+                        abs_file_path,
+                        file_type="obj",
+                        include_texture=True,
+                        include_normals=True,  # Ensure normals are included for better rendering
+                        resolver=None,
+                        mtl_name=f"model_{timestamp}.mtl"
+                    )
+                # Log the exported file path for debugging
+                logging.info(f"Successfully exported 3D model to: {abs_file_path}")
+                rv.append(abs_file_path)
+            except Exception as e:
+                logging.error(f"Error exporting {format} model: {str(e)}")
+                # Add None to maintain the expected return structure
+                rv.append(None)
         
         # Add metrics to return values
         rv.extend([
@@ -597,11 +607,19 @@ Unggah gambar untuk menghasilkan model 3D dengan parameter yang dapat disesuaika
                     with gr.TabItem("3D Visualisasi"):
                         output_model_obj = gr.Model3D(
                             label="Model 3D (OBJ)",
-                            interactive=False
+                            interactive=True,
+                            clear_color=[0.0, 0.0, 0.0, 0.0],  # Transparent background
+                            camera_position=[0, 0, 2.0],  # Set default camera position
+                            camera_target=[0, 0, 0],  # Look at the center
+                            height=600  # Increased height for better visibility
                         )
                         output_model_glb = gr.Model3D(
                             label="Model 3D (GLB)",
-                            interactive=False
+                            interactive=True,
+                            clear_color=[0.0, 0.0, 0.0, 0.0],  # Transparent background
+                            camera_position=[0, 0, 2.0],  # Set default camera position
+                            camera_target=[0, 0, 0],  # Look at the center
+                            height=600  # Increased height for better visibility
                         )
                     with gr.TabItem("Metrik Evaluasi"):
                         with gr.Row():
@@ -666,10 +684,20 @@ Unggah gambar untuk menghasilkan model 3D dengan parameter yang dapat disesuaika
         )
     
     # Create a popup for evaluation metrics info
-    evaluation_info_md = gr.Markdown(visible=False)
+    evaluation_info_md = gr.Markdown(visible=False, value="""
+    ## Evaluation Metrics Information
+    
+    - **F1 Score**: Measures the balance between precision and recall. Higher values (0-1) indicate better surface matching.
+    - **Uniform Hausdorff Distance (UHD)**: Measures the maximum distance between mesh surfaces. Lower values indicate better shape similarity.
+    - **Tangent-Space Mean Distance (TMD)**: Measures the average distance in tangential space. Lower values indicate better local shape similarity.
+    - **Chamfer Distance (CD)**: Measures the average distance between points. Lower values indicate better shape matching.
+    - **IoU Score**: Measures volume overlap. Higher values (0-1) indicate better volume similarity.
+    
+    For accurate evaluation metrics, upload a reference model.
+    """)
     
     def show_evaluation_info():
-        return gr.Markdown.update(visible=True), gr.Markdown.update(visible=False)
+        return {"visible": True}
     
     evaluation_info.click(
         fn=show_evaluation_info,
