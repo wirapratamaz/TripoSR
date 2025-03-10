@@ -238,13 +238,19 @@ def generate(image, mc_resolution, reference_model=None, formats=["obj", "glb"],
         
         timestamp = time.strftime("%Y%m%d_%H%M%S")
         
+        # Fixed quality settings to match dropdown options
         quality_settings = {
-            "Konsep": {"chunk_size": 32768, "detail_factor": 0.5},
-            "Standar": {"chunk_size": 16384, "detail_factor": 0.7},
-            "Tinggi": {"chunk_size": 8192, "detail_factor": 1.0}
+            "Draft": {"chunk_size": 32768, "detail_factor": 0.5},
+            "Standard": {"chunk_size": 16384, "detail_factor": 0.7},
+            "High": {"chunk_size": 8192, "detail_factor": 1.0}
         }
         
-        model.renderer.set_chunk_size(quality_settings[model_quality]["chunk_size"])
+        # Set chunk size based on quality setting
+        if model_quality in quality_settings:
+            model.renderer.set_chunk_size(quality_settings[model_quality]["chunk_size"])
+        else:
+            # Default to Standard if quality setting not found
+            model.renderer.set_chunk_size(quality_settings["Standard"]["chunk_size"])
         
         with torch.inference_mode():
             scene_codes = model(image, device=device)
@@ -383,7 +389,7 @@ def run_example(image_pil):
     preprocessed = preprocess(image_pil, False, 0.9)
     mesh_obj, mesh_glb, f1, uhd, tmd, cd, iou, metrics_text, radar_chart, bar_chart = generate(
         preprocessed, 128, None, ["obj", "glb"],
-        "Standar", 7, 0.3
+        "Standard", 7, 0.3
     )
     return preprocessed, mesh_obj, mesh_glb, f1, uhd, tmd, cd, iou, metrics_text, radar_chart, bar_chart
 
@@ -447,7 +453,7 @@ Unggah gambar untuk menghasilkan model 3D dengan parameter yang dapat disesuaika
                         label="Resolusi Marching Cubes",
                     )
                     model_quality = gr.Dropdown(
-                        ["Draft", "Standard", "High"],
+                        choices=["Draft", "Standard", "High"],
                         value="Standard",
                         label="Model Quality",
                     )
