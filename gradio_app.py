@@ -307,7 +307,18 @@ def generate(image, mc_resolution, reference_model=None, formats=["obj", "glb"],
             reference_mesh = trimesh.load(reference_model.name)
         
         # Calculate actual metrics
-        metrics = calculate_metrics(mesh, reference_mesh)
+        try:
+            metrics = calculate_metrics(mesh, reference_mesh)
+        except Exception as metric_error:
+            logging.warning(f"Error calculating metrics: {str(metric_error)}")
+            # Provide default metrics when calculation fails
+            metrics = {
+                "f1_score": 0.0,
+                "uniform_hausdorff_distance": 0.0,
+                "tangent_space_mean_distance": 0.0,
+                "chamfer_distance": 0.0,
+                "iou": 0.0
+            }
         
         # Add current metrics to history (limit to last 10)
         global metrics_history
@@ -327,7 +338,7 @@ def generate(image, mc_resolution, reference_model=None, formats=["obj", "glb"],
                 f"Uniform Hausdorff Distance: {metrics['uniform_hausdorff_distance']:.4f}\n"
                 f"Tangent-Space Mean Distance: {metrics['tangent_space_mean_distance']:.4f}\n"
                 f"Chamfer Distance: {metrics['chamfer_distance']:.4f}\n"
-                f"IoU Score: {metrics['iou_score']:.4f}"
+                f"IoU Score: {metrics['iou']:.4f}"
             )
         else:
             metrics_text = (
@@ -336,7 +347,7 @@ def generate(image, mc_resolution, reference_model=None, formats=["obj", "glb"],
                 f"Uniform Hausdorff Distance: {metrics['uniform_hausdorff_distance']:.4f}\n"
                 f"Tangent-Space Mean Distance: {metrics['tangent_space_mean_distance']:.4f}\n"
                 f"Chamfer Distance: {metrics['chamfer_distance']:.4f}\n"
-                f"IoU Score: {metrics['iou_score']:.4f}\n"
+                f"IoU Score: {metrics['iou']:.4f}\n"
                 f"Note: For more accurate metrics, provide a reference model."
             )
         
@@ -364,7 +375,7 @@ def generate(image, mc_resolution, reference_model=None, formats=["obj", "glb"],
             metrics["uniform_hausdorff_distance"],
             metrics["tangent_space_mean_distance"],
             metrics["chamfer_distance"],
-            metrics["iou_score"],
+            metrics["iou"],
             metrics_text,
             radar_chart,
             bar_chart
