@@ -491,7 +491,7 @@ Unggah gambar untuk menghasilkan model 3D dengan parameter yang dapat disesuaika
                 
             with gr.Column():
                 with gr.Tabs():
-                    with gr.TabItem("3D Visualization"):
+                    with gr.TabItem("3D Visualisasi"):
                         output_model_obj = gr.Model3D(
                             label="Model 3D (OBJ)",
                             interactive=False
