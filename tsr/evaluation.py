@@ -267,17 +267,20 @@ def calculate_tangent_space_mean_distance(predicted_mesh: trimesh.Trimesh, groun
                 faces=predicted_mesh.faces.copy())
             
             # Use trimesh's simplify module
-            from trimesh import simplify
-            simplified_mesh = simplify.simplify_quadric_decimation(
-                simplified_mesh, 
-                target_face_count
-            )
-            
-            return calculate_tangent_space_mean_distance(predicted_mesh, simplified_mesh)
-        except (ImportError, AttributeError):
-            # If simplify method is not available, return a default value
-            logging.warning("Mesh simplification not available. Using alternative evaluation method.")
-            return 0.0  # Return a default value when simplification is not possible
+            try:
+                from trimesh import simplify
+                simplified_mesh = simplify.simplify_quadric_decimation(
+                    simplified_mesh, 
+                    target_face_count
+                )
+                
+                return calculate_tangent_space_mean_distance(predicted_mesh, simplified_mesh)
+            except (ImportError, AttributeError) as e:
+                logging.warning(f"Simplify method not available: {str(e)}. Using alternative evaluation method.")
+                return 0.0  # Return a default value when simplification is not possible
+        except Exception as e:
+            logging.warning(f"Error in mesh simplification: {str(e)}. Using default evaluation value.")
+            return 0.0  # Return a default value when simplification fails for any reason
     
     try:
         # Sample points and normals from both meshes
@@ -352,37 +355,74 @@ def calculate_metrics(predicted_mesh: trimesh.Trimesh, ground_truth_mesh: Option
     """
     # Extract points from meshes for point-based metrics
     n_points = 2000  # Number of points to sample
-    predicted_points = predicted_mesh.sample(n_points)
+    
+    try:
+        predicted_points = predicted_mesh.sample(n_points)
+    except Exception as e:
+        logging.warning(f"Error sampling points from predicted mesh: {str(e)}")
+        predicted_points = None
     
     ground_truth_points = None
     if ground_truth_mesh is not None:
-        ground_truth_points = ground_truth_mesh.sample(n_points)
+        try:
+            ground_truth_points = ground_truth_mesh.sample(n_points)
+        except Exception as e:
+            logging.warning(f"Error sampling points from ground truth mesh: {str(e)}")
     
-    # Calculate comparison metrics if ground truth is available
-    f1 = calculate_f1_score(predicted_points, ground_truth_points if ground_truth_mesh else None)
-    uhd = calculate_uniform_hausdorff_distance(predicted_points, ground_truth_points if ground_truth_mesh else None)
-    tmd = calculate_tangent_space_mean_distance(predicted_mesh, ground_truth_mesh)
-    cd = calculate_chamfer_distance(predicted_points, ground_truth_points if ground_truth_mesh else None)
-    iou = calculate_iou(predicted_mesh, ground_truth_mesh)
+    # Initialize metrics with default values
+    metrics = {
+        "f1_score": 0.0,
+        "uniform_hausdorff_distance": 0.0,
+        "tangent_space_mean_distance": 0.0,
+        "chamfer_distance": 0.0,
+        "iou": 0.0,
+        "vertices": 0,
+        "faces": 0,
+        "compactness": 0.0,
+        "area_uniformity": 0.0,
+        "watertight": 0.0,
+        "manifold": 0.0,
+        "regularity": 0.0
+    }
+    
+    # Calculate each metric individually with error handling
+    if predicted_points is not None:
+        try:
+            metrics["f1_score"] = calculate_f1_score(predicted_points, ground_truth_points if ground_truth_mesh else None)
+        except Exception as e:
+            logging.warning(f"Error calculating F1 score: {str(e)}")
+            
+        try:
+            metrics["uniform_hausdorff_distance"] = calculate_uniform_hausdorff_distance(predicted_points, ground_truth_points if ground_truth_mesh else None)
+        except Exception as e:
+            logging.warning(f"Error calculating UHD: {str(e)}")
+            
+        try:
+            metrics["chamfer_distance"] = calculate_chamfer_distance(predicted_points, ground_truth_points if ground_truth_mesh else None)
+        except Exception as e:
+            logging.warning(f"Error calculating Chamfer distance: {str(e)}")
+    
+    try:
+        metrics["tangent_space_mean_distance"] = calculate_tangent_space_mean_distance(predicted_mesh, ground_truth_mesh)
+    except Exception as e:
+        logging.warning(f"Error calculating TMD: {str(e)}")
+        
+    try:
+        metrics["iou"] = calculate_iou(predicted_mesh, ground_truth_mesh)
+    except Exception as e:
+        logging.warning(f"Error calculating IoU: {str(e)}")
     
     # Calculate mesh-specific metrics
-    complexity = calculate_mesh_complexity(predicted_mesh)
-    quality = analyze_mesh_quality(predicted_mesh)
+    try:
+        complexity = calculate_mesh_complexity(predicted_mesh)
+        metrics.update(complexity)
+    except Exception as e:
+        logging.warning(f"Error calculating mesh complexity: {str(e)}")
     
-    # Combine all metrics
-    metrics = {
-        "f1_score": f1,
-        "uniform_hausdorff_distance": uhd,
-        "tangent_space_mean_distance": tmd,
-        "chamfer_distance": cd,
-        "iou": iou,
-        "vertices": complexity["vertices"],
-        "faces": complexity["faces"],
-        "compactness": complexity["compactness"],
-        "area_uniformity": complexity["area_uniformity"],
-        "watertight": quality["watertight"],
-        "manifold": quality["manifold"],
-        "regularity": quality["regularity"]
-    }
+    try:
+        quality = analyze_mesh_quality(predicted_mesh)
+        metrics.update(quality)
+    except Exception as e:
+        logging.warning(f"Error calculating mesh quality: {str(e)}")
     
     return metrics 

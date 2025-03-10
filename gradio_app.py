@@ -46,6 +46,13 @@ rembg_session = rembg.new_session()
 # Global storage for historical metrics to enable comparison
 metrics_history = []
 
+# Clear metrics history to avoid issues with key name changes
+def reset_metrics_history():
+    global metrics_history
+    metrics_history = []
+
+reset_metrics_history()  # Reset at startup
+
 def create_metrics_radar_chart(current_metrics):
     """Create a radar chart comparing the current metrics with historical averages"""
     # Define metrics to show (lower is better for UHD, TMD, CD; higher is better for IoU and F1)
@@ -54,7 +61,7 @@ def create_metrics_radar_chart(current_metrics):
         'uniform_hausdorff_distance': {'display': 'UHD', 'invert': True},
         'tangent_space_mean_distance': {'display': 'TMD', 'invert': True},
         'chamfer_distance': {'display': 'CD', 'invert': True},
-        'iou_score': {'display': 'IoU', 'invert': False}
+        'iou': {'display': 'IoU', 'invert': False}
     }
     
     # If we have historical metrics, calculate average
@@ -62,7 +69,11 @@ def create_metrics_radar_chart(current_metrics):
         # Calculate average of historical metrics
         avg_metrics = {}
         for metric_name in metrics_to_show.keys():
-            avg_metrics[metric_name] = sum(hist[metric_name] for hist in metrics_history) / len(metrics_history)
+            avg_metrics[metric_name] = sum(
+                hist.get(metric_name, 
+                         hist.get('iou_score' if metric_name == 'iou' else metric_name, 0.0)) 
+                for hist in metrics_history
+            ) / len(metrics_history)
         
         # Create data for the radar chart
         categories = [metrics_to_show[m]['display'] for m in metrics_to_show.keys()]
@@ -138,12 +149,24 @@ def create_metrics_bar_chart(current_metrics):
         'uniform_hausdorff_distance': {'display': 'UHD (↓)', 'color': 'red'},
         'tangent_space_mean_distance': {'display': 'TMD (↓)', 'color': 'orange'},
         'chamfer_distance': {'display': 'CD (↓)', 'color': 'green'},
-        'iou_score': {'display': 'IoU (↑)', 'color': 'blue'}
+        'iou': {'display': 'IoU (↑)', 'color': 'blue'}
     }
     
     # Prepare data for bar chart
     labels = [metrics_to_show[m]['display'] for m in metrics_to_show.keys()]
-    values = [current_metrics[m] for m in metrics_to_show.keys()]
+    
+    # Get values with fallback for missing keys (for backward compatibility)
+    values = []
+    for m in metrics_to_show.keys():
+        # Check if the key exists in current_metrics, with fallback
+        if m in current_metrics:
+            values.append(current_metrics[m])
+        elif m == 'iou' and 'iou_score' in current_metrics:
+            # Handle possible old format
+            values.append(current_metrics['iou_score'])
+        else:
+            values.append(0.0)  # Default value if missing
+    
     colors = [metrics_to_show[m]['color'] for m in metrics_to_show.keys()]
     
     # Create the bar chart
