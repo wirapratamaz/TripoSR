@@ -105,7 +105,6 @@ def calculate_iou(predicted_mesh: trimesh.Trimesh, ground_truth_mesh: trimesh.Tr
     """
     if ground_truth_mesh is None:
         # Since we can't use mesh simplification, estimate IoU differently
-        logging.info("No reference mesh for IoU calculation, using alternative method")
         
         try:
             # Voxelize the mesh
@@ -124,11 +123,9 @@ def calculate_iou(predicted_mesh: trimesh.Trimesh, ground_truth_mesh: trimesh.Tr
             fill_ratio = filled_count / total_count
             iou_estimate = min(fill_ratio * 2, 1.0)  # Scale and cap
             
-            logging.info(f"Self-evaluation IoU estimate: {iou_estimate}")
             return iou_estimate
             
-        except Exception as e:
-            logging.warning(f"Error in IoU alternative calculation: {str(e)}")
+        except Exception:
             return 0.5  # Return a middle value as default
     
     try:
@@ -144,8 +141,7 @@ def calculate_iou(predicted_mesh: trimesh.Trimesh, ground_truth_mesh: trimesh.Tr
         try:
             intersection = pred_voxels.intersection(gt_voxels)
             intersection_volume = intersection.volume if intersection else 0.0
-        except Exception as e:
-            logging.warning(f"Error calculating voxel intersection: {str(e)}. Estimating instead.")
+        except Exception:
             # Estimate intersection if boolean operations fail
             intersection_volume = min(p_volume, gt_volume) * 0.5  # Rough estimate
         
@@ -155,8 +151,7 @@ def calculate_iou(predicted_mesh: trimesh.Trimesh, ground_truth_mesh: trimesh.Tr
         iou = intersection_volume / union_volume if union_volume > 0 else 0.0
         return min(iou, 1.0)  # Cap at 1.0 to ensure valid score
         
-    except Exception as e:
-        logging.warning(f"Error calculating IoU: {str(e)}")
+    except Exception:
         return 0.0
 
 def calculate_mesh_complexity(mesh: trimesh.Trimesh) -> Dict[str, float]:
@@ -274,7 +269,6 @@ def calculate_tangent_space_mean_distance(predicted_mesh: trimesh.Trimesh, groun
     if ground_truth_mesh is None:
         # Since we can't use simplification methods, we'll use a different approach
         # for self-evaluation without requiring a reference mesh
-        logging.info("No reference mesh for TMD calculation, using alternative method")
         
         try:
             # Check mesh quality instead of comparison
@@ -296,11 +290,9 @@ def calculate_tangent_space_mean_distance(predicted_mesh: trimesh.Trimesh, groun
             # Lower is better, so we want tmd to increase with mean_distance
             tmd_estimate = min(mean_distance * 10, 1.0)  # Scale and cap
             
-            logging.info(f"Self-evaluation TMD estimate: {tmd_estimate}")
             return tmd_estimate
             
-        except Exception as e:
-            logging.warning(f"Error in TMD alternative calculation: {str(e)}")
+        except Exception:
             return 0.0  # Return a default value
     
     try:
@@ -379,16 +371,15 @@ def calculate_metrics(predicted_mesh: trimesh.Trimesh, ground_truth_mesh: Option
     
     try:
         predicted_points = predicted_mesh.sample(n_points)
-    except Exception as e:
-        logging.warning(f"Error sampling points from predicted mesh: {str(e)}")
+    except Exception:
         predicted_points = None
     
     ground_truth_points = None
     if ground_truth_mesh is not None:
         try:
             ground_truth_points = ground_truth_mesh.sample(n_points)
-        except Exception as e:
-            logging.warning(f"Error sampling points from ground truth mesh: {str(e)}")
+        except Exception:
+            pass
     
     # Initialize metrics with default values
     metrics = {
@@ -410,40 +401,40 @@ def calculate_metrics(predicted_mesh: trimesh.Trimesh, ground_truth_mesh: Option
     if predicted_points is not None:
         try:
             metrics["f1_score"] = calculate_f1_score(predicted_points, ground_truth_points if ground_truth_mesh else None)
-        except Exception as e:
-            logging.warning(f"Error calculating F1 score: {str(e)}")
+        except Exception:
+            pass
             
         try:
             metrics["uniform_hausdorff_distance"] = calculate_uniform_hausdorff_distance(predicted_points, ground_truth_points if ground_truth_mesh else None)
-        except Exception as e:
-            logging.warning(f"Error calculating UHD: {str(e)}")
+        except Exception:
+            pass
             
         try:
             metrics["chamfer_distance"] = calculate_chamfer_distance(predicted_points, ground_truth_points if ground_truth_mesh else None)
-        except Exception as e:
-            logging.warning(f"Error calculating Chamfer distance: {str(e)}")
+        except Exception:
+            pass
     
     try:
         metrics["tangent_space_mean_distance"] = calculate_tangent_space_mean_distance(predicted_mesh, ground_truth_mesh)
-    except Exception as e:
-        logging.warning(f"Error calculating TMD: {str(e)}")
+    except Exception:
+        pass
         
     try:
         metrics["iou"] = calculate_iou(predicted_mesh, ground_truth_mesh)
-    except Exception as e:
-        logging.warning(f"Error calculating IoU: {str(e)}")
+    except Exception:
+        pass
     
     # Calculate mesh-specific metrics
     try:
         complexity = calculate_mesh_complexity(predicted_mesh)
         metrics.update(complexity)
-    except Exception as e:
-        logging.warning(f"Error calculating mesh complexity: {str(e)}")
+    except Exception:
+        pass
     
     try:
         quality = analyze_mesh_quality(predicted_mesh)
         metrics.update(quality)
-    except Exception as e:
-        logging.warning(f"Error calculating mesh quality: {str(e)}")
+    except Exception:
+        pass
     
     return metrics 

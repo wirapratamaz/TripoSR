@@ -5,8 +5,8 @@ import time
 
 # Configure logging
 logging.basicConfig(
-    level=logging.DEBUG,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=logging.WARNING,
+    format='%(levelname)s:%(message)s'
 )
 
 import gradio as gr
@@ -61,9 +61,6 @@ reset_metrics_history()  # Reset at startup
 
 def create_metrics_radar_chart(current_metrics):
     """Create a radar chart comparing the current metrics with historical averages"""
-    # Add debug logging
-    logging.debug(f"Creating radar chart with metrics: {current_metrics}")
-    
     # Define metrics to show (lower is better for UHD, TMD, CD; higher is better for IoU and F1)
     metrics_to_show = {
         'f1_score': {'display': 'F1', 'invert': False},
@@ -84,9 +81,7 @@ def create_metrics_radar_chart(current_metrics):
                             hist.get('iou_score' if metric_name == 'iou' else metric_name, 0.0)) 
                     for hist in metrics_history
                 ) / len(metrics_history)
-                logging.debug(f"Average for {metric_name}: {avg_metrics[metric_name]}")
-            except Exception as e:
-                logging.warning(f"Error calculating average for {metric_name}: {str(e)}")
+            except Exception:
                 avg_metrics[metric_name] = 0.0
         
         # Create data for the radar chart
@@ -102,32 +97,26 @@ def create_metrics_radar_chart(current_metrics):
                 current_val = current_metrics[metric_name]
                 avg_val = avg_metrics[metric_name]
                 
-                logging.debug(f"Processing {metric_name}: current={current_val}, avg={avg_val}")
-                
                 # For metrics where lower is better, invert for visualization
                 if config['invert']:
                     # Use a simple inversion formula for normalized values
                     # Map to 0-1 scale where 1 is better
                     # Avoid division by zero
                     max_val = max(current_val, avg_val) * 1.2  # 20% buffer
-                    logging.debug(f"Inverted metric {metric_name}: max_val={max_val}")
                     
                     if max_val == 0:
                         # Both values are zero, display as perfect score
                         current_values.append(1.0)
                         history_values.append(1.0)
-                        logging.debug(f"Zero values for {metric_name}, using 1.0")
                     else:
                         current_values.append(1 - (current_val / max_val))
                         history_values.append(1 - (avg_val / max_val))
                 else:
                     # Scale the values to a reasonable range
                     scale_factor = max(max(current_val, avg_val) * 1.2, 0.001)  # Avoid zero
-                    logging.debug(f"Regular metric {metric_name}: scale_factor={scale_factor}")
                     current_values.append(current_val / scale_factor)
                     history_values.append(avg_val / scale_factor)
-            except Exception as e:
-                logging.warning(f"Error processing metric {metric_name}: {str(e)}")
+            except Exception:
                 # Use default values when error occurs
                 current_values.append(0.5)
                 history_values.append(0.5)
@@ -162,8 +151,7 @@ def create_metrics_radar_chart(current_metrics):
             )
             
             return fig
-        except Exception as e:
-            logging.error(f"Error creating radar chart: {str(e)}")
+        except Exception:
             # Return empty figure on error
             return go.Figure()
     else:
@@ -180,9 +168,6 @@ def create_metrics_radar_chart(current_metrics):
 
 def create_metrics_bar_chart(current_metrics):
     """Create a bar chart for current metrics"""
-    # Add debug logging
-    logging.debug(f"Creating bar chart with metrics: {current_metrics}")
-    
     metrics_to_show = {
         'f1_score': {'display': 'F1 Score (↑)', 'color': 'purple'},
         'uniform_hausdorff_distance': {'display': 'UHD (↓)', 'color': 'red'},
@@ -201,16 +186,12 @@ def create_metrics_bar_chart(current_metrics):
             # Check if the key exists in current_metrics, with fallback
             if m in current_metrics:
                 values.append(current_metrics[m])
-                logging.debug(f"Got value for {m}: {current_metrics[m]}")
             elif m == 'iou' and 'iou_score' in current_metrics:
                 # Handle possible old format
                 values.append(current_metrics['iou_score'])
-                logging.debug(f"Using iou_score ({current_metrics['iou_score']}) for iou")
             else:
                 values.append(0.0)  # Default value if missing
-                logging.debug(f"Using default 0.0 for missing metric {m}")
-        except Exception as e:
-            logging.warning(f"Error getting value for {m}: {str(e)}")
+        except Exception:
             values.append(0.0)  # Default on error
     
     colors = [metrics_to_show[m]['color'] for m in metrics_to_show.keys()]
@@ -228,8 +209,7 @@ def create_metrics_bar_chart(current_metrics):
         )
         
         return fig
-    except Exception as e:
-        logging.error(f"Error creating bar chart: {str(e)}")
+    except Exception:
         # Return empty figure on error
         return go.Figure()
 
@@ -403,8 +383,7 @@ def generate(image, mc_resolution, reference_model=None, formats=["obj", "glb"],
         # Create visualization figures
         try:
             radar_chart = create_metrics_radar_chart(metrics)
-        except Exception as chart_error:
-            logging.error(f"Error creating radar chart: {str(chart_error)}")
+        except Exception:
             # Create a simple empty chart on error
             radar_chart = go.Figure()
             radar_chart.add_annotation(
@@ -416,8 +395,7 @@ def generate(image, mc_resolution, reference_model=None, formats=["obj", "glb"],
         
         try:
             bar_chart = create_metrics_bar_chart(metrics)
-        except Exception as chart_error:
-            logging.error(f"Error creating bar chart: {str(chart_error)}")
+        except Exception:
             # Create a simple empty chart on error
             bar_chart = go.Figure()
             bar_chart.add_annotation(
@@ -448,9 +426,8 @@ def generate(image, mc_resolution, reference_model=None, formats=["obj", "glb"],
                     f"IoU Score: {metrics['iou']:.4f}\n"
                     f"Note: For more accurate metrics, provide a reference model."
                 )
-        except Exception as text_error:
-            logging.error(f"Error formatting metrics text: {str(text_error)}")
-            metrics_text = "Error generating metrics text. Please check logs for details."
+        except Exception:
+            metrics_text = "Error generating metrics text."
         
         # Save files with permanent paths
         rv = []
@@ -485,7 +462,31 @@ def generate(image, mc_resolution, reference_model=None, formats=["obj", "glb"],
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
             
-        return rv
+        # Return only the first file path for each format and the metrics
+        # This ensures we return exactly the expected number of values
+        obj_path = None
+        glb_path = None
+        
+        for path in rv:
+            if isinstance(path, str):
+                if path.endswith('.obj') and obj_path is None:
+                    obj_path = path
+                elif path.endswith('.glb') and glb_path is None:
+                    glb_path = path
+        
+        # Return exactly the expected values in the expected order
+        return [
+            obj_path,  # For output_model_obj
+            glb_path,  # For output_model_glb
+            float(metrics["f1_score"]),  # Ensure numeric type
+            float(metrics["uniform_hausdorff_distance"]),  # Ensure numeric type
+            float(metrics["tangent_space_mean_distance"]),  # Ensure numeric type
+            float(metrics["chamfer_distance"]),  # Ensure numeric type
+            float(metrics["iou"]),  # Ensure numeric type
+            metrics_text,
+            radar_chart,
+            bar_chart
+        ]
     except RuntimeError as e:
         if "CUDA out of memory" in str(e):
             if torch.cuda.is_available():
@@ -499,11 +500,12 @@ def generate(image, mc_resolution, reference_model=None, formats=["obj", "glb"],
 
 def run_example(image_pil):
     preprocessed = preprocess(image_pil, False, 0.9)
-    mesh_obj, mesh_glb, f1, uhd, tmd, cd, iou, metrics_text, radar_chart, bar_chart = generate(
+    result = generate(
         preprocessed, 128, None, ["obj", "glb"],
         "Standard", 7, 0.3
     )
-    return preprocessed, mesh_obj, mesh_glb, f1, uhd, tmd, cd, iou, metrics_text, radar_chart, bar_chart
+    # Unpack the result and return all expected values
+    return [preprocessed] + result
 
 
 with gr.Blocks(title="3D Model Generation") as interface:
