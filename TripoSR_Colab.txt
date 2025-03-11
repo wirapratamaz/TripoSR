@@ -28,11 +28,14 @@
 !pip install scipy>=1.11.0
 !pip install -q aiofiles fastapi pandas orjson typing-extensions
 
-# Install specific version of Gradio known to work with this application
-!pip install gradio==3.50.0
+# First uninstall any existing gradio installation to avoid conflicts
+!pip uninstall -y gradio
 
-# Install from requirements.txt
-!pip install -r requirements.txt
+# Install specific version of Gradio known to work with this specific error
+!pip install gradio==3.9.0
+
+# Install from requirements.txt (skip gradio which will be installed by the line above)
+!pip install -r requirements.txt --no-deps
 
 # Set up environment variables for better GPU memory management
 import os
