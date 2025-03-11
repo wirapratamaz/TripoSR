@@ -390,31 +390,16 @@ def generate(image, mc_resolution, reference_model=None, formats=["obj", "glb"],
         # Create visualization figures
         try:
             radar_chart = create_metrics_radar_chart(metrics)
-        except Exception:
-            # Create a simple empty chart on error
-            radar_chart = go.Figure()
-            radar_chart.add_annotation(
-                text="Error creating radar chart",
-                xref="paper", yref="paper",
-                x=0.5, y=0.5,
-                showarrow=False
-            )
-        
-        try:
             bar_chart = create_metrics_bar_chart(metrics)
-        except Exception:
-            # Create a simple empty chart on error
+        except Exception as e:
+            logging.error(f"Error creating charts: {str(e)}")
+            # Create empty figures on error
+            radar_chart = go.Figure()
             bar_chart = go.Figure()
-            bar_chart.add_annotation(
-                text="Error creating bar chart",
-                xref="paper", yref="paper",
-                x=0.5, y=0.5,
-                showarrow=False
-            )
-        
+
         # Format metrics text
         try:
-            if reference_mesh is not None:
+            if reference_model is not None:
                 metrics_text = (
                     f"Metrics (compared to reference model):\n"
                     f"F1 Score: {metrics['f1_score']:.4f}\n"
@@ -493,13 +478,13 @@ def generate(image, mc_resolution, reference_model=None, formats=["obj", "glb"],
             glb_path if glb_path else None,  # For output_model_glb viewer
             obj_path if obj_path else None,  # For OBJ download
             glb_path if glb_path else None,  # For GLB download
-            float(metrics.get('f1_score', 0.0)),
-            float(metrics.get('uniform_hausdorff_distance', 0.0)),
-            float(metrics.get('tangent_space_mean_distance', 0.0)),
-            float(metrics.get('chamfer_distance', 0.0)),
-            float(metrics.get('iou', 0.0)),
+            metrics.get('f1_score', 0.0),  # Return raw float values for metrics
+            metrics.get('uniform_hausdorff_distance', 0.0),
+            metrics.get('tangent_space_mean_distance', 0.0),
+            metrics.get('chamfer_distance', 0.0),
+            metrics.get('iou', 0.0),
             str(metrics_text),
-            radar_chart,
+            radar_chart,  # Return the Plotly figures
             bar_chart
         ]
     except RuntimeError as e:
@@ -645,12 +630,11 @@ Unggah gambar untuk menghasilkan model 3D dengan parameter yang dapat disesuaika
                             cd_metric = gr.Number(label="Chamfer Distance", value=0.0, precision=4)
                             iou_metric = gr.Number(label="IoU Score", value=0.0, precision=4)
                         
+                        metrics_text = gr.Textbox(label="Metrics Details", interactive=False)
+                        
                         with gr.Row():
-                            metrics_text = gr.Textbox(
-                                label="Metrik Lengkap", 
-                                value="Hasilkan model untuk melihat metrik evaluasi.\n\nUntuk perbandingan yang lebih akurat, unggah model referensi.",
-                                lines=6
-                            )
+                            radar_plot = gr.Plot(label="Metrics Radar Chart")
+                            bar_plot = gr.Plot(label="Metrics Bar Chart")
                     
                     with gr.TabItem("Visualisasi Metrik"):
                         gr.Markdown("""
