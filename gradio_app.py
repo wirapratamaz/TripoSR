@@ -56,69 +56,11 @@ def create_metrics_radar_chart(current_metrics):
         'iou_score': {'display': 'IoU', 'invert': False}
     }
     
-    # If we have historical metrics, calculate average
-    if len(metrics_history) > 0:
-        # Calculate average of historical metrics
-        avg_metrics = {}
-        for metric_name in metrics_to_show.keys():
-            avg_metrics[metric_name] = sum(hist[metric_name] for hist in metrics_history) / len(metrics_history)
-        
-        # Create data for the radar chart
-        categories = [metrics_to_show[m]['display'] for m in metrics_to_show.keys()]
-        
-        # Normalize values for better visualization (invert where necessary)
-        current_values = []
-        history_values = []
-        
-        for metric_name, config in metrics_to_show.items():
-            # Get raw values
-            current_val = current_metrics[metric_name]
-            avg_val = avg_metrics[metric_name]
-            
-            # For metrics where lower is better, invert for visualization
-            if config['invert']:
-                # Use a simple inversion formula for normalized values
-                # Map to 0-1 scale where 1 is better
-                max_val = max(current_val, avg_val) * 1.2  # 20% buffer
-                current_values.append(1 - (current_val / max_val))
-                history_values.append(1 - (avg_val / max_val))
-            else:
-                current_values.append(current_val)
-                history_values.append(avg_val)
-        
-        # Create the radar chart
-        fig = go.Figure()
-        
-        # Add current metrics
-        fig.add_trace(go.Scatterpolar(
-            r=current_values,
-            theta=categories,
-            fill='toself',
-            name='Current Model'
-        ))
-        
-        # Add historical average
-        fig.add_trace(go.Scatterpolar(
-            r=history_values,
-            theta=categories,
-            fill='toself',
-            name='Historical Average'
-        ))
-        
-        # Update layout
-        fig.update_layout(
-            polar=dict(
-                radialaxis=dict(
-                    visible=True,
-                    range=[0, 1]
-                )
-            ),
-            showlegend=True,
-            title="Metrics Comparison (Higher is Better)"
-        )
-        
-        return fig
-    else:
+    # Filter metrics_to_show to only include keys that exist in current_metrics
+    available_metrics = {k: v for k, v in metrics_to_show.items() if k in current_metrics}
+    
+    # If we have no available metrics or no historical metrics, return empty chart
+    if not available_metrics or len(metrics_history) == 0:
         # Create an empty figure with a message if no history
         fig = go.Figure()
         fig.add_annotation(
@@ -129,6 +71,73 @@ def create_metrics_radar_chart(current_metrics):
         )
         fig.update_layout(title="Metrics Comparison")
         return fig
+    
+    # Calculate average of historical metrics
+    avg_metrics = {}
+    for metric_name in available_metrics.keys():
+        # Check if all historical metrics have this key
+        valid_hist = [hist for hist in metrics_history if metric_name in hist]
+        if valid_hist:
+            avg_metrics[metric_name] = sum(hist[metric_name] for hist in valid_hist) / len(valid_hist)
+        else:
+            # If no historical data has this metric, use current value
+            avg_metrics[metric_name] = current_metrics[metric_name]
+    
+    # Create data for the radar chart
+    categories = [available_metrics[m]['display'] for m in available_metrics.keys()]
+    
+    # Normalize values for better visualization (invert where necessary)
+    current_values = []
+    history_values = []
+    
+    for metric_name, config in available_metrics.items():
+        # Get raw values
+        current_val = current_metrics[metric_name]
+        avg_val = avg_metrics[metric_name]
+        
+        # For metrics where lower is better, invert for visualization
+        if config['invert']:
+            # Use a simple inversion formula for normalized values
+            # Map to 0-1 scale where 1 is better
+            max_val = max(current_val, avg_val) * 1.2  # 20% buffer
+            current_values.append(1 - (current_val / max_val))
+            history_values.append(1 - (avg_val / max_val))
+        else:
+            current_values.append(current_val)
+            history_values.append(avg_val)
+    
+    # Create the radar chart
+    fig = go.Figure()
+    
+    # Add current metrics
+    fig.add_trace(go.Scatterpolar(
+        r=current_values,
+        theta=categories,
+        fill='toself',
+        name='Current Model'
+    ))
+    
+    # Add historical average
+    fig.add_trace(go.Scatterpolar(
+        r=history_values,
+        theta=categories,
+        fill='toself',
+        name='Historical Average'
+    ))
+    
+    # Update layout
+    fig.update_layout(
+        polar=dict(
+            radialaxis=dict(
+                visible=True,
+                range=[0, 1]
+            )
+        ),
+        showlegend=True,
+        title="Metrics Comparison (Higher is Better)"
+    )
+    
+    return fig
 
 def create_metrics_bar_chart(current_metrics):
     """Create a bar chart for current metrics"""
@@ -140,20 +149,45 @@ def create_metrics_bar_chart(current_metrics):
         'iou_score': {'display': 'IoU (↑)', 'color': 'blue'}
     }
     
-    # Prepare data for bar chart
-    labels = [metrics_to_show[m]['display'] for m in metrics_to_show.keys()]
-    values = [current_metrics[m] for m in metrics_to_show.keys()]
-    colors = [metrics_to_show[m]['color'] for m in metrics_to_show.keys()]
+    # Filter to only include metrics that exist in current_metrics
+    available_metrics = {k: v for k, v in metrics_to_show.items() if k in current_metrics}
+    
+    if not available_metrics:
+        # Create an empty figure with a message if no metrics available
+        fig = go.Figure()
+        fig.add_annotation(
+            text="No metrics available",
+            xref="paper", yref="paper",
+            x=0.5, y=0.5,
+            showarrow=False
+        )
+        fig.update_layout(title="Metrics")
+        return fig
+    
+    # Create lists for the bar chart
+    names = [available_metrics[m]['display'] for m in available_metrics.keys()]
+    values = [current_metrics[m] for m in available_metrics.keys()]
+    colors = [available_metrics[m]['color'] for m in available_metrics.keys()]
     
     # Create the bar chart
     fig = go.Figure(data=[
-        go.Bar(x=labels, y=values, marker_color=colors)
+        go.Bar(
+            x=names,
+            y=values,
+            marker_color=colors
+        )
     ])
     
+    # Update layout
     fig.update_layout(
-        title="Current Metrics Values",
-        xaxis_title="Metrics",
-        yaxis_title="Value"
+        title="Current Metrics",
+        xaxis_title="Metric",
+        yaxis_title="Value",
+        yaxis=dict(
+            title="Value",
+            titlefont_size=16,
+            tickfont_size=14,
+        )
     )
     
     return fig
@@ -315,24 +349,30 @@ def generate(image, mc_resolution, reference_model=None, formats=["obj", "glb"],
         
         # Format metrics text
         if reference_mesh is not None:
-            metrics_text = (
-                f"Metrics (compared to reference model):\n"
-                f"F1 Score: {metrics['f1_score']:.4f}\n"
-                f"Uniform Hausdorff Distance: {metrics['uniform_hausdorff_distance']:.4f}\n"
-                f"Tangent-Space Mean Distance: {metrics['tangent_space_mean_distance']:.4f}\n"
-                f"Chamfer Distance: {metrics['chamfer_distance']:.4f}\n"
-                f"IoU Score: {metrics['iou_score']:.4f}"
-            )
+            metrics_text = f"Metrics (compared to reference model):\n"
+            if 'f1_score' in metrics:
+                metrics_text += f"F1 Score: {metrics['f1_score']:.4f}\n"
+            if 'uniform_hausdorff_distance' in metrics:
+                metrics_text += f"Uniform Hausdorff Distance: {metrics['uniform_hausdorff_distance']:.4f}\n"
+            if 'tangent_space_mean_distance' in metrics:
+                metrics_text += f"Tangent-Space Mean Distance: {metrics['tangent_space_mean_distance']:.4f}\n"
+            if 'chamfer_distance' in metrics:
+                metrics_text += f"Chamfer Distance: {metrics['chamfer_distance']:.4f}\n"
+            if 'iou_score' in metrics:
+                metrics_text += f"IoU Score: {metrics['iou_score']:.4f}"
         else:
-            metrics_text = (
-                f"Self-evaluation metrics:\n"
-                f"F1 Score: {metrics['f1_score']:.4f}\n"
-                f"Uniform Hausdorff Distance: {metrics['uniform_hausdorff_distance']:.4f}\n"
-                f"Tangent-Space Mean Distance: {metrics['tangent_space_mean_distance']:.4f}\n"
-                f"Chamfer Distance: {metrics['chamfer_distance']:.4f}\n"
-                f"IoU Score: {metrics['iou_score']:.4f}\n"
-                f"Note: For more accurate metrics, provide a reference model."
-            )
+            metrics_text = f"Self-evaluation metrics:\n"
+            if 'f1_score' in metrics:
+                metrics_text += f"F1 Score: {metrics['f1_score']:.4f}\n"
+            if 'uniform_hausdorff_distance' in metrics:
+                metrics_text += f"Uniform Hausdorff Distance: {metrics['uniform_hausdorff_distance']:.4f}\n"
+            if 'tangent_space_mean_distance' in metrics:
+                metrics_text += f"Tangent-Space Mean Distance: {metrics['tangent_space_mean_distance']:.4f}\n"
+            if 'chamfer_distance' in metrics:
+                metrics_text += f"Chamfer Distance: {metrics['chamfer_distance']:.4f}\n"
+            if 'iou_score' in metrics:
+                metrics_text += f"IoU Score: {metrics['iou_score']:.4f}\n"
+            metrics_text += f"Note: For more accurate metrics, provide a reference model."
         
         # Save files with permanent paths
         rv = []
@@ -354,11 +394,11 @@ def generate(image, mc_resolution, reference_model=None, formats=["obj", "glb"],
         
         # Add metrics to return values
         rv.extend([
-            metrics["f1_score"],
-            metrics["uniform_hausdorff_distance"],
-            metrics["tangent_space_mean_distance"],
-            metrics["chamfer_distance"],
-            metrics["iou_score"],
+            metrics.get("f1_score", 0.0),
+            metrics.get("uniform_hausdorff_distance", 0.0),
+            metrics.get("tangent_space_mean_distance", 0.0),
+            metrics.get("chamfer_distance", 0.0),
+            metrics.get("iou_score", 0.0),
             metrics_text,
             radar_chart,
             bar_chart
