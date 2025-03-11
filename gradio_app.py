@@ -504,8 +504,25 @@ def run_example(image_pil):
         preprocessed, 128, None, ["obj", "glb"],
         "Standard", 7, 0.3
     )
-    # Unpack the result and return all expected values
-    return [preprocessed] + result
+    # The result from generate contains:
+    # [obj_path, glb_path, obj_path, glb_path, f1_score, hausdorff, tangent, chamfer, iou, metrics_text, radar_chart, bar_chart]
+    
+    # We need to return values in the order expected by the examples row:
+    # [processed_image, output_model_obj, output_model_glb, f1_metric, uhd_metric, tmd_metric, cd_metric, iou_metric, metrics_text, radar_plot, bar_plot]
+    
+    return [
+        preprocessed,        # processed_image
+        result[0],           # output_model_obj (obj_path)
+        result[1],           # output_model_glb (glb_path)
+        result[4],           # f1_metric
+        result[5],           # uhd_metric
+        result[6],           # tmd_metric
+        result[7],           # chamfer_distance
+        result[8],           # iou
+        result[9],           # metrics_text
+        result[10],          # radar_plot
+        result[11]           # bar_plot
+    ]
 
 
 with gr.Blocks(title="3D Model Generation") as interface:
