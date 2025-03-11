@@ -446,8 +446,8 @@ Unggah gambar untuk menghasilkan model 3D dengan parameter yang dapat disesuaika
                         label="Resolusi Marching Cubes",
                     )
                     model_quality = gr.Dropdown(
-                        ["Draft", "Standard", "High"],
-                        value="Standard",
+                        ["Konsep", "Standar", "Tinggi"],  # Changed from ["Draft", "Standard", "High"]
+                        value="Standar",  # Changed from "Standard"
                         label="Model Quality",
                     )
                     texture_quality = gr.Slider(
