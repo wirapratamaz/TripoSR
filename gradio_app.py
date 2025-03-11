@@ -404,6 +404,34 @@ def generate(image, mc_resolution, reference_model=None, formats=["obj", "glb"],
             bar_chart
         ])
         
+        # Add animation rendering
+        with torch.inference_mode():
+            render_images = model.render(scene_codes, n_views=30, return_type="pil")
+            
+            # Create animation file path
+            animation_path = os.path.join(output_dir, f"preview_{timestamp}.gif")
+            
+            # Save the rendered views as an animated GIF
+            render_images[0][0].save(
+                animation_path,
+                save_all=True,
+                append_images=render_images[0][1:],
+                duration=100,  # Duration for each frame in milliseconds
+                loop=0        # 0 means loop forever
+            )
+        
+        # Add the animation path to the model metadata
+        if len(rv) >= 1 and isinstance(rv[0], str) and rv[0].endswith('.obj'):
+            # Read the OBJ file
+            with open(rv[0], 'r') as f:
+                obj_content = f.read()
+            
+            # Add animation reference in the MTL file
+            mtl_path = rv[0].replace('.obj', '.mtl')
+            with open(mtl_path, 'a') as f:
+                f.write(f'\n# Preview animation\n')
+                f.write(f'map_Kd {animation_path}\n')
+        
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
             
@@ -514,14 +542,21 @@ Unggah gambar untuk menghasilkan model 3D dengan parameter yang dapat disesuaika
         with gr.Column():
             with gr.Tabs():
                 with gr.TabItem("3D Visualization"):
-                    output_model_obj = gr.Model3D(
-                        label="Model 3D (OBJ)",
-                        interactive=False
-                    )
-                    output_model_glb = gr.Model3D(
-                        label="Model 3D (GLB)",
-                        interactive=False
-                    )
+                    with gr.Row():
+                        preview_animation = gr.Image(
+                            label="360° Preview",
+                            show_label=True,
+                            interactive=False
+                        )
+                    with gr.Row():
+                        output_model_obj = gr.Model3D(
+                            label="Model 3D (OBJ)",
+                            interactive=False
+                        )
+                        output_model_glb = gr.Model3D(
+                            label="Model 3D (GLB)",
+                            interactive=False
+                        )
                 with gr.TabItem("Metrik Evaluasi"):
                     with gr.Row():
                         f1_metric = gr.Number(label="F1 Score", value=0.0, precision=4)
@@ -617,6 +652,7 @@ Unggah gambar untuk menghasilkan model 3D dengan parameter yang dapat disesuaika
             smoothing_factor
         ],
         outputs=[
+            preview_animation,  # Add this new output
             output_model_obj, 
             output_model_glb,
             f1_metric,
