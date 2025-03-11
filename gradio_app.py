@@ -628,13 +628,13 @@ Unggah gambar untuk menghasilkan model 3D dengan parameter yang dapat disesuaika
                             download_obj = gr.File(
                                 label="Download OBJ Model",
                                 file_count="single",
-                                type="file",
+                                type="filepath",  # Changed from "file" to "filepath"
                                 interactive=False
                             )
                             download_glb = gr.File(
                                 label="Download GLB Model",
                                 file_count="single",
-                                type="file",
+                                type="filepath",  # Changed from "file" to "filepath"
                                 interactive=False
                             )
                     with gr.TabItem("Metrik Evaluasi"):
