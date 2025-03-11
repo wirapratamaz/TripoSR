@@ -612,14 +612,14 @@ Unggah gambar untuk menghasilkan model 3D dengan parameter yang dapat disesuaika
                     with gr.TabItem("3D Visualisasi"):
                         output_model_obj = gr.Model3D(
                             label="Model 3D (OBJ)",
-                            interactive=True,
+                            interactive=False,  # Changed to False to prevent user uploads
                             clear_color=[0.0, 0.0, 0.0, 0.0],  # Transparent background
                             camera_position=[0, 0, 2.0],  # Set default camera position
                             height=600  # Increased height for better visibility
                         )
                         output_model_glb = gr.Model3D(
                             label="Model 3D (GLB)",
-                            interactive=True,
+                            interactive=False,  # Changed to False to prevent user uploads
                             clear_color=[0.0, 0.0, 0.0, 0.0],  # Transparent background
                             camera_position=[0, 0, 2.0],  # Set default camera position
                             height=600  # Increased height for better visibility
