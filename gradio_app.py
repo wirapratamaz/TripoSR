@@ -610,7 +610,6 @@ Unggah gambar untuk menghasilkan model 3D dengan parameter yang dapat disesuaika
                             interactive=True,
                             clear_color=[0.0, 0.0, 0.0, 0.0],  # Transparent background
                             camera_position=[0, 0, 2.0],  # Set default camera position
-                            camera_target=[0, 0, 0],  # Look at the center
                             height=600  # Increased height for better visibility
                         )
                         output_model_glb = gr.Model3D(
@@ -618,7 +617,6 @@ Unggah gambar untuk menghasilkan model 3D dengan parameter yang dapat disesuaika
                             interactive=True,
                             clear_color=[0.0, 0.0, 0.0, 0.0],  # Transparent background
                             camera_position=[0, 0, 2.0],  # Set default camera position
-                            camera_target=[0, 0, 0],  # Look at the center
                             height=600  # Increased height for better visibility
                         )
                     with gr.TabItem("Metrik Evaluasi"):
