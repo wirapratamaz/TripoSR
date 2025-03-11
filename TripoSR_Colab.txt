@@ -31,8 +31,9 @@
 # First uninstall any existing gradio installation to avoid conflicts
 !pip uninstall -y gradio
 
-# Install specific version of Gradio known to work with this specific error
-!pip install gradio==3.9.0
+# Install specific version of Gradio known to work better with this application
+# Version 3.13.0 has been reported to work better than 3.9.0 for some similar issues
+!pip install gradio==3.13.0
 
 # Install from requirements.txt (skip gradio which will be installed by the line above)
 !pip install -r requirements.txt --no-deps
@@ -50,6 +51,61 @@ if torch.cuda.is_available():
 
 # Verify repository exists
 !ls -la /content/TripoSR
+
+# Patch the run_example function in gradio_app.py to properly handle numpy float values
+print("Patching gradio_app.py to fix numpy.float64 issue...")
+patch_code = '''
+import re
+
+# Read the file
+with open('gradio_app.py', 'r') as file:
+    content = file.read()
+
+# Fix the run_example function to convert numpy floats to Python floats
+run_example_pattern = r'def run_example\(image_pil\):(.*?)return \[preprocessed\] \+ result'
+run_example_replacement = """def run_example(image_pil):
+    preprocessed = preprocess(image_pil, False, 0.9)
+    result = generate(
+        preprocessed, 128, None, ["obj", "glb"],
+        "Standard", 7, 0.3
+    )
+    
+    # Convert numpy floats to Python floats
+    processed_result = []
+    for item in result:
+        if hasattr(item, 'dtype') and 'float' in str(item.dtype):
+            processed_result.append(float(item))
+        else:
+            processed_result.append(item)
+    
+    # Return the processed values
+    return [
+        preprocessed,           # processed_image
+        processed_result[0],    # output_model_obj (obj_path)
+        processed_result[1],    # output_model_glb (glb_path)
+        processed_result[4],    # f1_metric
+        processed_result[5],    # uhd_metric
+        processed_result[6],    # tmd_metric
+        processed_result[7],    # chamfer_distance
+        processed_result[8],    # iou
+        processed_result[9],    # metrics_text
+        processed_result[10],   # radar_plot
+        processed_result[11]    # bar_plot
+    ]"""
+
+updated_content = re.sub(run_example_pattern, run_example_replacement, content, flags=re.DOTALL)
+
+# Write the updated content back to the file
+with open('gradio_app.py', 'w') as file:
+    file.write(updated_content)
+
+print("Patching complete!")
+'''
+
+with open('patch_script.py', 'w') as file:
+    file.write(patch_code)
+
+!python patch_script.py
 
 # Run the Gradio app
 %cd /content/TripoSR
