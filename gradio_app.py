@@ -3,12 +3,6 @@ import os
 import tempfile
 import time
 
-# Configure logging
-logging.basicConfig(
-    level=logging.WARNING,
-    format='%(levelname)s:%(message)s'
-)
-
 import gradio as gr
 import numpy as np
 import rembg
@@ -19,7 +13,6 @@ from functools import partial
 import plotly.graph_objects as go
 import plotly.express as px
 import json
-import io
 
 from tsr.system import TSR
 from tsr.utils import remove_background, resize_foreground, to_gradio_3d_orientation
@@ -27,13 +20,6 @@ from tsr.evaluation import calculate_metrics
 
 import argparse
 
-def ensure_output_permissions():
-    output_dir = os.path.join(os.getcwd(), "outputs")
-    os.makedirs(output_dir, exist_ok=True)
-    # Ensure directory has right permissions
-    os.chmod(output_dir, 0o755)
-
-ensure_output_permissions()  # Call at startup
 
 # Configure CUDA memory settings
 if torch.cuda.is_available():
@@ -59,13 +45,6 @@ rembg_session = rembg.new_session()
 # Global storage for historical metrics to enable comparison
 metrics_history = []
 
-# Clear metrics history to avoid issues with key name changes
-def reset_metrics_history():
-    global metrics_history
-    metrics_history = []
-
-reset_metrics_history()  # Reset at startup
-
 def create_metrics_radar_chart(current_metrics):
     """Create a radar chart comparing the current metrics with historical averages"""
     # Define metrics to show (lower is better for UHD, TMD, CD; higher is better for IoU and F1)
@@ -74,7 +53,7 @@ def create_metrics_radar_chart(current_metrics):
         'uniform_hausdorff_distance': {'display': 'UHD', 'invert': True},
         'tangent_space_mean_distance': {'display': 'TMD', 'invert': True},
         'chamfer_distance': {'display': 'CD', 'invert': True},
-        'iou': {'display': 'IoU', 'invert': False}
+        'iou_score': {'display': 'IoU', 'invert': False}
     }
     
     # If we have historical metrics, calculate average
@@ -82,14 +61,7 @@ def create_metrics_radar_chart(current_metrics):
         # Calculate average of historical metrics
         avg_metrics = {}
         for metric_name in metrics_to_show.keys():
-            try:
-                avg_metrics[metric_name] = sum(
-                    hist.get(metric_name, 
-                            hist.get('iou_score' if metric_name == 'iou' else metric_name, 0.0)) 
-                    for hist in metrics_history
-                ) / len(metrics_history)
-            except Exception:
-                avg_metrics[metric_name] = 0.0
+            avg_metrics[metric_name] = sum(hist[metric_name] for hist in metrics_history) / len(metrics_history)
         
         # Create data for the radar chart
         categories = [metrics_to_show[m]['display'] for m in metrics_to_show.keys()]
@@ -99,68 +71,53 @@ def create_metrics_radar_chart(current_metrics):
         history_values = []
         
         for metric_name, config in metrics_to_show.items():
-            try:
-                # Get raw values
-                current_val = current_metrics[metric_name]
-                avg_val = avg_metrics[metric_name]
-                
-                # For metrics where lower is better, invert for visualization
-                if config['invert']:
-                    # Use a simple inversion formula for normalized values
-                    # Map to 0-1 scale where 1 is better
-                    # Avoid division by zero
-                    max_val = max(current_val, avg_val) * 1.2  # 20% buffer
-                    
-                    if max_val == 0:
-                        # Both values are zero, display as perfect score
-                        current_values.append(1.0)
-                        history_values.append(1.0)
-                    else:
-                        current_values.append(1 - (current_val / max_val))
-                        history_values.append(1 - (avg_val / max_val))
-                else:
-                    # Scale the values to a reasonable range
-                    scale_factor = max(max(current_val, avg_val) * 1.2, 0.001)  # Avoid zero
-                    current_values.append(current_val / scale_factor)
-                    history_values.append(avg_val / scale_factor)
-            except Exception:
-                # Use default values when error occurs
-                current_values.append(0.5)
-                history_values.append(0.5)
+            # Get raw values
+            current_val = current_metrics[metric_name]
+            avg_val = avg_metrics[metric_name]
+            
+            # For metrics where lower is better, invert for visualization
+            if config['invert']:
+                # Use a simple inversion formula for normalized values
+                # Map to 0-1 scale where 1 is better
+                max_val = max(current_val, avg_val) * 1.2  # 20% buffer
+                current_values.append(1 - (current_val / max_val))
+                history_values.append(1 - (avg_val / max_val))
+            else:
+                current_values.append(current_val)
+                history_values.append(avg_val)
         
         # Create the radar chart
-        try:
-            fig = go.Figure()
-            
-            # Add current metrics
-            fig.add_trace(go.Scatterpolar(
-                r=current_values,
-                theta=categories,
-                fill='toself',
-                name='Current Model'
-            ))
-            
-            # Add historical average
-            fig.add_trace(go.Scatterpolar(
-                r=history_values,
-                theta=categories,
-                fill='toself',
-                name='Historical Average'
-            ))
-            
-            fig.update_layout(
-                polar=dict(
-                    radialaxis=dict(
-                        visible=True,
-                        range=[0, 1]
-                    )),
-                showlegend=True
-            )
-            
-            return fig
-        except Exception:
-            # Return empty figure on error
-            return go.Figure()
+        fig = go.Figure()
+        
+        # Add current metrics
+        fig.add_trace(go.Scatterpolar(
+            r=current_values,
+            theta=categories,
+            fill='toself',
+            name='Current Model'
+        ))
+        
+        # Add historical average
+        fig.add_trace(go.Scatterpolar(
+            r=history_values,
+            theta=categories,
+            fill='toself',
+            name='Historical Average'
+        ))
+        
+        # Update layout
+        fig.update_layout(
+            polar=dict(
+                radialaxis=dict(
+                    visible=True,
+                    range=[0, 1]
+                )
+            ),
+            showlegend=True,
+            title="Metrics Comparison (Higher is Better)"
+        )
+        
+        return fig
     else:
         # Create an empty figure with a message if no history
         fig = go.Figure()
@@ -180,45 +137,26 @@ def create_metrics_bar_chart(current_metrics):
         'uniform_hausdorff_distance': {'display': 'UHD (↓)', 'color': 'red'},
         'tangent_space_mean_distance': {'display': 'TMD (↓)', 'color': 'orange'},
         'chamfer_distance': {'display': 'CD (↓)', 'color': 'green'},
-        'iou': {'display': 'IoU (↑)', 'color': 'blue'}
+        'iou_score': {'display': 'IoU (↑)', 'color': 'blue'}
     }
     
     # Prepare data for bar chart
     labels = [metrics_to_show[m]['display'] for m in metrics_to_show.keys()]
-    
-    # Get values with fallback for missing keys (for backward compatibility)
-    values = []
-    for m in metrics_to_show.keys():
-        try:
-            # Check if the key exists in current_metrics, with fallback
-            if m in current_metrics:
-                values.append(current_metrics[m])
-            elif m == 'iou' and 'iou_score' in current_metrics:
-                # Handle possible old format
-                values.append(current_metrics['iou_score'])
-            else:
-                values.append(0.0)  # Default value if missing
-        except Exception:
-            values.append(0.0)  # Default on error
-    
+    values = [current_metrics[m] for m in metrics_to_show.keys()]
     colors = [metrics_to_show[m]['color'] for m in metrics_to_show.keys()]
     
     # Create the bar chart
-    try:
-        fig = go.Figure(data=[
-            go.Bar(x=labels, y=values, marker_color=colors)
-        ])
-        
-        fig.update_layout(
-            title="Current Metrics Values",
-            xaxis_title="Metrics",
-            yaxis_title="Value"
-        )
-        
-        return fig
-    except Exception:
-        # Return empty figure on error
-        return go.Figure()
+    fig = go.Figure(data=[
+        go.Bar(x=labels, y=values, marker_color=colors)
+    ])
+    
+    fig.update_layout(
+        title="Current Metrics Values",
+        xaxis_title="Metrics",
+        yaxis_title="Value"
+    )
+    
+    return fig
 
 def check_input_image(input_image):
     if input_image is None:
@@ -299,19 +237,13 @@ def generate(image, mc_resolution, reference_model=None, formats=["obj", "glb"],
         
         timestamp = time.strftime("%Y%m%d_%H%M%S")
         
-        # Fixed quality settings to match dropdown options
         quality_settings = {
-            "Draft": {"chunk_size": 32768, "detail_factor": 0.5},
-            "Standard": {"chunk_size": 16384, "detail_factor": 0.7},
-            "High": {"chunk_size": 8192, "detail_factor": 1.0}
+            "Konsep": {"chunk_size": 32768, "detail_factor": 0.5},
+            "Standar": {"chunk_size": 16384, "detail_factor": 0.7},
+            "Tinggi": {"chunk_size": 8192, "detail_factor": 1.0}
         }
         
-        # Set chunk size based on quality setting
-        if model_quality in quality_settings:
-            model.renderer.set_chunk_size(quality_settings[model_quality]["chunk_size"])
-        else:
-            # Default to Standard if quality setting not found
-            model.renderer.set_chunk_size(quality_settings["Standard"]["chunk_size"])
+        model.renderer.set_chunk_size(quality_settings[model_quality]["chunk_size"])
         
         with torch.inference_mode():
             scene_codes = model(image, device=device)
@@ -368,18 +300,7 @@ def generate(image, mc_resolution, reference_model=None, formats=["obj", "glb"],
             reference_mesh = trimesh.load(reference_model.name)
         
         # Calculate actual metrics
-        try:
-            metrics = calculate_metrics(mesh, reference_mesh)
-        except Exception as metric_error:
-            logging.warning(f"Error calculating metrics: {str(metric_error)}")
-            # Provide default metrics when calculation fails
-            metrics = {
-                "f1_score": 0.01,
-                "uniform_hausdorff_distance": 0.01,
-                "tangent_space_mean_distance": 0.01,
-                "chamfer_distance": 0.01,
-                "iou": 0.01
-            }
+        metrics = calculate_metrics(mesh, reference_mesh)
         
         # Add current metrics to history (limit to last 10)
         global metrics_history
@@ -388,62 +309,47 @@ def generate(image, mc_resolution, reference_model=None, formats=["obj", "glb"],
             metrics_history = metrics_history[-10:]
         
         # Create visualization figures
-        try:
-            radar_chart = create_metrics_radar_chart(metrics)
-            bar_chart = create_metrics_bar_chart(metrics)
-        except Exception as e:
-            logging.error(f"Error creating charts: {str(e)}")
-            # Create empty figures on error
-            radar_chart = go.Figure()
-            bar_chart = go.Figure()
-
+        radar_chart = create_metrics_radar_chart(metrics)
+        bar_chart = create_metrics_bar_chart(metrics)
+        
         # Format metrics text
-        try:
-            if reference_model is not None:
-                metrics_text = (
-                    f"Metrics (compared to reference model):\n"
-                    f"F1 Score: {metrics['f1_score']:.4f}\n"
-                    f"Uniform Hausdorff Distance: {metrics['uniform_hausdorff_distance']:.4f}\n"
-                    f"Tangent-Space Mean Distance: {metrics['tangent_space_mean_distance']:.4f}\n"
-                    f"Chamfer Distance: {metrics['chamfer_distance']:.4f}\n"
-                    f"IoU Score: {metrics['iou']:.4f}"
-                )
-            else:
-                metrics_text = "Self-evaluation metrics not available without reference model."
-        except Exception as e:
-            metrics_text = f"Error generating metrics text: {str(e)}"
-
-        # Ensure metrics_text is a string, not a dict
-        if isinstance(metrics_text, dict):
-            metrics_text = str(metrics_text)
-
+        if reference_mesh is not None:
+            metrics_text = (
+                f"Metrics (compared to reference model):\n"
+                f"F1 Score: {metrics['f1_score']:.4f}\n"
+                f"Uniform Hausdorff Distance: {metrics['uniform_hausdorff_distance']:.4f}\n"
+                f"Tangent-Space Mean Distance: {metrics['tangent_space_mean_distance']:.4f}\n"
+                f"Chamfer Distance: {metrics['chamfer_distance']:.4f}\n"
+                f"IoU Score: {metrics['iou_score']:.4f}"
+            )
+        else:
+            metrics_text = (
+                f"Self-evaluation metrics:\n"
+                f"F1 Score: {metrics['f1_score']:.4f}\n"
+                f"Uniform Hausdorff Distance: {metrics['uniform_hausdorff_distance']:.4f}\n"
+                f"Tangent-Space Mean Distance: {metrics['tangent_space_mean_distance']:.4f}\n"
+                f"Chamfer Distance: {metrics['chamfer_distance']:.4f}\n"
+                f"IoU Score: {metrics['iou_score']:.4f}\n"
+                f"Note: For more accurate metrics, provide a reference model."
+            )
+        
         # Save files with permanent paths
         rv = []
         for format in formats:
-            try:
-                file_path = os.path.join(output_dir, f"model_{timestamp}.{format}")
-                # Make sure to use absolute path
-                abs_file_path = os.path.abspath(file_path)
-                
-                if format == "glb":
-                    mesh.export(abs_file_path, file_type="glb")
-                else:
-                    # For OBJ, use improved texture settings
-                    mesh.export(
-                        abs_file_path,
-                        file_type="obj",
-                        include_texture=True,
-                        include_normals=True,  # Ensure normals are included for better rendering
-                        resolver=None,
-                        mtl_name=f"model_{timestamp}.mtl"
-                    )
-                # Log the exported file path for debugging
-                logging.info(f"Successfully exported 3D model to: {abs_file_path}")
-                rv.append(abs_file_path)
-            except Exception as e:
-                logging.error(f"Error exporting {format} model: {str(e)}")
-                # Add None to maintain the expected return structure
-                rv.append(None)
+            file_path = os.path.join(output_dir, f"model_{timestamp}.{format}")
+            if format == "glb":
+                mesh.export(file_path, file_type="glb")
+            else:
+                # For OBJ, use improved texture settings
+                mesh.export(
+                    file_path,
+                    file_type="obj",
+                    include_texture=True,
+                    include_normals=True,  # Ensure normals are included for better rendering
+                    resolver=None,
+                    mtl_name=f"model_{timestamp}.mtl"
+                )
+            rv.append(file_path)
         
         # Add metrics to return values
         rv.extend([
@@ -451,7 +357,7 @@ def generate(image, mc_resolution, reference_model=None, formats=["obj", "glb"],
             metrics["uniform_hausdorff_distance"],
             metrics["tangent_space_mean_distance"],
             metrics["chamfer_distance"],
-            metrics["iou"],
+            metrics["iou_score"],
             metrics_text,
             radar_chart,
             bar_chart
@@ -460,38 +366,12 @@ def generate(image, mc_resolution, reference_model=None, formats=["obj", "glb"],
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
             
-        # Return only the first file path for each format and the metrics
-        # This ensures we return exactly the expected number of values
-        obj_path = None
-        glb_path = None
-        
-        for path in rv:
-            if isinstance(path, str):
-                if path.endswith('.obj') and obj_path is None:
-                    obj_path = path
-                elif path.endswith('.glb') and glb_path is None:
-                    glb_path = path
-        
-        # Return values ensuring correct types
-        return [
-            obj_path if obj_path else None,  # For output_model_obj viewer
-            glb_path if glb_path else None,  # For output_model_glb viewer
-            obj_path if obj_path else None,  # For OBJ download
-            glb_path if glb_path else None,  # For GLB download
-            metrics.get('f1_score', 0.0),  # Return raw float values for metrics
-            metrics.get('uniform_hausdorff_distance', 0.0),
-            metrics.get('tangent_space_mean_distance', 0.0),
-            metrics.get('chamfer_distance', 0.0),
-            metrics.get('iou', 0.0),
-            str(metrics_text),
-            radar_chart,  # Return the Plotly figures
-            bar_chart
-        ]
+        return rv
     except RuntimeError as e:
         if "CUDA out of memory" in str(e):
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
-            raise gr.Error("GPU memory error. Try 'Standard' quality or lower resolution.")
+            raise gr.Error("GPU memory error. Try 'Konsep' quality or lower resolution.")
         else:
             raise gr.Error(f"Generation error: {str(e)}")
     except Exception as e:
@@ -500,29 +380,11 @@ def generate(image, mc_resolution, reference_model=None, formats=["obj", "glb"],
 
 def run_example(image_pil):
     preprocessed = preprocess(image_pil, False, 0.9)
-    result = generate(
+    mesh_obj, mesh_glb, f1, uhd, tmd, cd, iou, metrics_text, radar_chart, bar_chart = generate(
         preprocessed, 128, None, ["obj", "glb"],
-        "Standard", 7, 0.3
+        "Standar", 7, 0.3
     )
-    # The result from generate contains:
-    # [obj_path, glb_path, obj_path, glb_path, f1_score, hausdorff, tangent, chamfer, iou, metrics_text, radar_chart, bar_chart]
-    
-    # We need to return values in the order expected by the examples row:
-    # [processed_image, output_model_obj, output_model_glb, f1_metric, uhd_metric, tmd_metric, cd_metric, iou_metric, metrics_text, radar_plot, bar_plot]
-    
-    return [
-        preprocessed,        # processed_image
-        result[0],           # output_model_obj (obj_path)
-        result[1],           # output_model_glb (glb_path)
-        result[4],           # f1_metric
-        result[5],           # uhd_metric
-        result[6],           # tmd_metric
-        result[7],           # chamfer_distance
-        result[8],           # iou
-        result[9],           # metrics_text
-        result[10],          # radar_plot
-        result[11]           # bar_plot
-    ]
+    return preprocessed, mesh_obj, mesh_glb, f1, uhd, tmd, cd, iou, metrics_text, radar_chart, bar_chart
 
 
 with gr.Blocks(title="3D Model Generation") as interface:
@@ -552,12 +414,11 @@ Unggah gambar untuk menghasilkan model 3D dengan parameter yang dapat disesuaika
 6. Waktu pemrosesan meningkat dengan pengaturan resolusi dan kualitas yang lebih tinggi.
     """
     )
-    
     with gr.Row(variant="panel"):
         with gr.Column():
             with gr.Row():
                 input_image = gr.Image(
-                    label="Unggah Gambar Disini",
+                    label="Gambar Input",
                     image_mode="RGBA",
                     sources="upload",
                     type="pil",
@@ -567,7 +428,7 @@ Unggah gambar untuk menghasilkan model 3D dengan parameter yang dapat disesuaika
             with gr.Row():
                 with gr.Group():
                     do_remove_background = gr.Checkbox(
-                        label="Remove Background", value=True
+                        label="Hapus Latar Belakang", value=True
                     )
                     foreground_ratio = gr.Slider(
                         minimum=0.5,
@@ -581,10 +442,10 @@ Unggah gambar untuk menghasilkan model 3D dengan parameter yang dapat disesuaika
                         maximum=256,
                         value=128,
                         step=16,
-                        label="Marching Cubes Resolution",
+                        label="Resolusi Marching Cubes",
                     )
                     model_quality = gr.Dropdown(
-                        choices=["Draft", "Standard", "High"],
+                        ["Draft", "Standard", "High"],
                         value="Standard",
                         label="Model Quality",
                     )
@@ -608,82 +469,64 @@ Unggah gambar untuk menghasilkan model 3D dengan parameter yang dapat disesuaika
                     )
                     submit = gr.Button("Generate 3D Model", variant="primary")
                     evaluation_info = gr.Button("ℹ️ Metric Information", size="sm")
-                
-            with gr.Column():
-                with gr.Tabs():
-                    with gr.TabItem("3D Visualisasi"):
-                        output_model_obj = gr.Model3D(
-                            label="Model 3D (OBJ)",
-                            interactive=False,  # Changed to False to prevent user uploads
-                            clear_color=[0.0, 0.0, 0.0, 0.0],  # Transparent background
-                            camera_position=[0, 0, 2.0],  # Set default camera position
-                            height=600  # Increased height for better visibility
-                        )
-                        output_model_glb = gr.Model3D(
-                            label="Model 3D (GLB)",
-                            interactive=False,  # Changed to False to prevent user uploads
-                            clear_color=[0.0, 0.0, 0.0, 0.0],  # Transparent background
-                            camera_position=[0, 0, 2.0],  # Set default camera position
-                            height=600  # Increased height for better visibility
-                        )
-                        with gr.Row():
-                            download_obj = gr.File(
-                                label="Download OBJ Model",
-                                file_count="single",
-                                type="filepath",  # Changed from "file" to "filepath"
-                                interactive=False
-                            )
-                            download_glb = gr.File(
-                                label="Download GLB Model",
-                                file_count="single",
-                                type="filepath",  # Changed from "file" to "filepath"
-                                interactive=False
-                            )
-                    with gr.TabItem("Metrik Evaluasi"):
-                        with gr.Row():
-                            f1_metric = gr.Number(label="F1 Score", value=0.0, precision=4)
-                            uhd_metric = gr.Number(label="Uniform Hausdorff Distance", value=0.0, precision=4)
-                            tmd_metric = gr.Number(label="Tangent-Space Mean Distance", value=0.0, precision=4)
-                            cd_metric = gr.Number(label="Chamfer Distance", value=0.0, precision=4)
-                            iou_metric = gr.Number(label="IoU Score", value=0.0, precision=4)
-                        
-                        metrics_text = gr.Textbox(label="Metrics Details", interactive=False)
-                        
-                        with gr.Row():
-                            radar_plot = gr.Plot(label="Metrics Radar Chart")
-                            bar_plot = gr.Plot(label="Metrics Bar Chart")
-                    
-                    with gr.TabItem("Visualisasi Metrik"):
-                        gr.Markdown("""
-                        ### Visualisasi Perbandingan Metrik
-                        
-                        Diagram di bawah menunjukkan perbandingan metrik model saat ini dengan rata-rata historis.
-                        Semakin besar nilai pada diagram radar, semakin baik kualitas metrik tersebut.
-                        """)
-                        with gr.Row():
-                            radar_plot = gr.Plot(label="Perbandingan dengan Riwayat", show_label=False)
-                        
-                        gr.Markdown("""
-                        ### Nilai Metrik Saat Ini
-                        
-                        Diagram batang di bawah menunjukkan nilai absolut dari metrik saat ini.
-                        UHD, TMD, CD: nilai lebih rendah lebih baik (↓)
-                        IoU: nilai lebih tinggi lebih baik (↑)
-                        """)
-                        with gr.Row():
-                            bar_plot = gr.Plot(label="Nilai Metrik Saat Ini", show_label=False)
-                        
-                        gr.Markdown("""
-                        **Petunjuk Metrik:**
-                        - **F1 Score**: Mengukur keseimbangan antara presisi dan recall. Nilai lebih tinggi (0-1) menunjukkan kecocokan permukaan yang lebih baik.
-                        - **Uniform Hausdorff Distance (UHD)**: Mengukur jarak maksimum antara permukaan mesh. Nilai lebih rendah menunjukkan kesamaan bentuk yang lebih baik.
-                        - **Tangent-Space Mean Distance (TMD)**: Mengukur jarak rata-rata pada ruang tangensial. Nilai lebih rendah menunjukkan kesamaan bentuk lokal yang lebih baik.
-                        - **Chamfer Distance (CD)**: Mengukur jarak rata-rata antar titik. Nilai lebih rendah menunjukkan kecocokan bentuk yang lebih baik.
-                        - **IoU Score**: Mengukur volume tumpang tindih. Nilai lebih tinggi (0-1) menunjukkan kesamaan volume yang lebih baik.
-                        
-                        Untuk metrik evaluasi yang akurat, unggah model referensi.
-                        """)
         
+        with gr.Column():
+            with gr.Tabs():
+                with gr.TabItem("3D Visualization"):
+                    output_model_obj = gr.Model3D(
+                        label="Model 3D (OBJ)",
+                        interactive=False
+                    )
+                    output_model_glb = gr.Model3D(
+                        label="Model 3D (GLB)",
+                        interactive=False
+                    )
+                with gr.TabItem("Metrik Evaluasi"):
+                    with gr.Row():
+                        f1_metric = gr.Number(label="F1 Score", value=0.0, precision=4)
+                        uhd_metric = gr.Number(label="Uniform Hausdorff Distance", value=0.0, precision=4)
+                        tmd_metric = gr.Number(label="Tangent-Space Mean Distance", value=0.0, precision=4)
+                        cd_metric = gr.Number(label="Chamfer Distance", value=0.0, precision=4)
+                        iou_metric = gr.Number(label="IoU Score", value=0.0, precision=4)
+                    
+                    with gr.Row():
+                        metrics_text = gr.Textbox(
+                            label="Metrik Lengkap", 
+                            value="Hasilkan model untuk melihat metrik evaluasi.\n\nUntuk perbandingan yang lebih akurat, unggah model referensi.",
+                            lines=6
+                        )
+                
+                with gr.TabItem("Visualisasi Metrik"):
+                    gr.Markdown("""
+                    ### Visualisasi Perbandingan Metrik
+                    
+                    Diagram di bawah menunjukkan perbandingan metrik model saat ini dengan rata-rata historis.
+                    Semakin besar nilai pada diagram radar, semakin baik kualitas metrik tersebut.
+                    """)
+                    with gr.Row():
+                        radar_plot = gr.Plot(label="Perbandingan dengan Riwayat", show_label=False)
+                    
+                    gr.Markdown("""
+                    ### Nilai Metrik Saat Ini
+                    
+                    Diagram batang di bawah menunjukkan nilai absolut dari metrik saat ini.
+                    UHD, TMD, CD: nilai lebih rendah lebih baik (↓)
+                    IoU: nilai lebih tinggi lebih baik (↑)
+                    """)
+                    with gr.Row():
+                        bar_plot = gr.Plot(label="Nilai Metrik Saat Ini", show_label=False)
+                    
+                    gr.Markdown("""
+                    **Petunjuk Metrik:**
+                    - **F1 Score**: Mengukur keseimbangan antara presisi dan recall. Nilai lebih tinggi (0-1) menunjukkan kecocokan permukaan yang lebih baik.
+                    - **Uniform Hausdorff Distance (UHD)**: Mengukur jarak maksimum antara permukaan mesh. Nilai lebih rendah menunjukkan kesamaan bentuk yang lebih baik.
+                    - **Tangent-Space Mean Distance (TMD)**: Mengukur jarak rata-rata pada ruang tangensial. Nilai lebih rendah menunjukkan kesamaan bentuk lokal yang lebih baik.
+                    - **Chamfer Distance (CD)**: Mengukur jarak rata-rata antar titik. Nilai lebih rendah menunjukkan kecocokan bentuk yang lebih baik.
+                    - **IoU Score**: Mengukur volume tumpang tindih. Nilai lebih tinggi (0-1) menunjukkan kesamaan volume yang lebih baik.
+                    
+                    Untuk metrik evaluasi yang akurat, unggah model referensi.
+                    """)
+    
     with gr.Row(variant="panel"):
         gr.Examples(
             examples=[
@@ -701,20 +544,10 @@ Unggah gambar untuk menghasilkan model 3D dengan parameter yang dapat disesuaika
         )
     
     # Create a popup for evaluation metrics info
-    evaluation_info_md = gr.Markdown(visible=False, value="""
-    ## Evaluation Metrics Information
-    
-    - **F1 Score**: Measures the balance between precision and recall. Higher values (0-1) indicate better surface matching.
-    - **Uniform Hausdorff Distance (UHD)**: Measures the maximum distance between mesh surfaces. Lower values indicate better shape similarity.
-    - **Tangent-Space Mean Distance (TMD)**: Measures the average distance in tangential space. Lower values indicate better local shape similarity.
-    - **Chamfer Distance (CD)**: Measures the average distance between points. Lower values indicate better shape matching.
-    - **IoU Score**: Measures volume overlap. Higher values (0-1) indicate better volume similarity.
-    
-    For accurate evaluation metrics, upload a reference model.
-    """)
+    evaluation_info_md = gr.Markdown(visible=False)
     
     def show_evaluation_info():
-        return {"visible": True}
+        return gr.Markdown.update(visible=True), gr.Markdown.update(visible=False)
     
     evaluation_info.click(
         fn=show_evaluation_info,
@@ -722,26 +555,28 @@ Unggah gambar untuk menghasilkan model 3D dengan parameter yang dapat disesuaika
         outputs=[evaluation_info_md],
     )
         
-    submit.click(
-        fn=check_input_image,
-        inputs=[input_image],
-        outputs=[],
-    ).then(
+    submit.click(fn=check_input_image, inputs=[input_image]).success(
         fn=preprocess,
         inputs=[input_image, do_remove_background, foreground_ratio],
         outputs=[processed_image],
-    ).then(
-        fn=generate,
+    ).success(
+        fn=lambda img, rb, fr, mc, rm, mq, tq, sf: 
+            generate(
+                preprocess(img, rb, fr),
+                mc, rm, ["obj", "glb"], mq, tq, sf
+            ),
         inputs=[
-            processed_image,
+            input_image, 
+            do_remove_background, 
+            foreground_ratio,
             mc_resolution,
             reference_model,
             model_quality,
             texture_quality,
-            smoothing_factor,
+            smoothing_factor
         ],
         outputs=[
-            output_model_obj,
+            output_model_obj, 
             output_model_glb,
             f1_metric,
             uhd_metric,
@@ -750,10 +585,8 @@ Unggah gambar untuk menghasilkan model 3D dengan parameter yang dapat disesuaika
             iou_metric,
             metrics_text,
             radar_plot,
-            bar_plot,
-            download_obj,
-            download_glb,
-        ],
+            bar_plot
+        ]
     )
 
 
