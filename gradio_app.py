@@ -27,6 +27,13 @@ from tsr.evaluation import calculate_metrics
 
 import argparse
 
+def ensure_output_permissions():
+    output_dir = os.path.join(os.getcwd(), "outputs")
+    os.makedirs(output_dir, exist_ok=True)
+    # Ensure directory has right permissions
+    os.chmod(output_dir, 0o755)
+
+ensure_output_permissions()  # Call at startup
 
 # Configure CUDA memory settings
 if torch.cuda.is_available():
@@ -417,18 +424,14 @@ def generate(image, mc_resolution, reference_model=None, formats=["obj", "glb"],
                     f"IoU Score: {metrics['iou']:.4f}"
                 )
             else:
-                metrics_text = (
-                    f"Self-evaluation metrics:\n"
-                    f"F1 Score: {metrics['f1_score']:.4f}\n"
-                    f"Uniform Hausdorff Distance: {metrics['uniform_hausdorff_distance']:.4f}\n"
-                    f"Tangent-Space Mean Distance: {metrics['tangent_space_mean_distance']:.4f}\n"
-                    f"Chamfer Distance: {metrics['chamfer_distance']:.4f}\n"
-                    f"IoU Score: {metrics['iou']:.4f}\n"
-                    f"Note: For more accurate metrics, provide a reference model."
-                )
-        except Exception:
-            metrics_text = "Error generating metrics text."
-        
+                metrics_text = "Self-evaluation metrics not available without reference model."
+        except Exception as e:
+            metrics_text = f"Error generating metrics text: {str(e)}"
+
+        # Ensure metrics_text is a string, not a dict
+        if isinstance(metrics_text, dict):
+            metrics_text = str(metrics_text)
+
         # Save files with permanent paths
         rv = []
         for format in formats:
@@ -484,16 +487,18 @@ def generate(image, mc_resolution, reference_model=None, formats=["obj", "glb"],
                 elif path.endswith('.glb') and glb_path is None:
                     glb_path = path
         
-        # Return exactly the expected values in the expected order
+        # Return values ensuring correct types
         return [
-            obj_path,  # For output_model_obj
-            glb_path,  # For output_model_glb
-            float(metrics["f1_score"]),  # Ensure numeric type
-            float(metrics["uniform_hausdorff_distance"]),  # Ensure numeric type
-            float(metrics["tangent_space_mean_distance"]),  # Ensure numeric type
-            float(metrics["chamfer_distance"]),  # Ensure numeric type
-            float(metrics["iou"]),  # Ensure numeric type
-            metrics_text,
+            obj_path if obj_path else None,  # For output_model_obj viewer
+            glb_path if glb_path else None,  # For output_model_glb viewer
+            obj_path if obj_path else None,  # For OBJ download
+            glb_path if glb_path else None,  # For GLB download
+            float(metrics.get('f1_score', 0.0)),
+            float(metrics.get('uniform_hausdorff_distance', 0.0)),
+            float(metrics.get('tangent_space_mean_distance', 0.0)),
+            float(metrics.get('chamfer_distance', 0.0)),
+            float(metrics.get('iou', 0.0)),
+            str(metrics_text),
             radar_chart,
             bar_chart
         ]
@@ -619,6 +624,19 @@ Unggah gambar untuk menghasilkan model 3D dengan parameter yang dapat disesuaika
                             camera_position=[0, 0, 2.0],  # Set default camera position
                             height=600  # Increased height for better visibility
                         )
+                        with gr.Row():
+                            download_obj = gr.File(
+                                label="Download OBJ Model",
+                                file_count="single",
+                                type="file",
+                                interactive=False
+                            )
+                            download_glb = gr.File(
+                                label="Download GLB Model",
+                                file_count="single",
+                                type="file",
+                                interactive=False
+                            )
                     with gr.TabItem("Metrik Evaluasi"):
                         with gr.Row():
                             f1_metric = gr.Number(label="F1 Score", value=0.0, precision=4)
@@ -732,6 +750,8 @@ Unggah gambar untuk menghasilkan model 3D dengan parameter yang dapat disesuaika
             metrics_text,
             radar_plot,
             bar_plot,
+            download_obj,
+            download_glb,
         ],
     )
 
