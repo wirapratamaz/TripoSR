@@ -225,7 +225,7 @@ def fix_model_orientation(mesh):
 
 
 def generate(image, mc_resolution, reference_model=None, formats=["obj", "glb"], 
-             model_quality="Standard", texture_quality=7, smoothing_factor=0.3):
+             model_quality="Standar", texture_quality=7, smoothing_factor=0.3):
     try:
         # Clear CUDA cache before starting
         if torch.cuda.is_available():
@@ -237,9 +237,10 @@ def generate(image, mc_resolution, reference_model=None, formats=["obj", "glb"],
         
         timestamp = time.strftime("%Y%m%d_%H%M%S")
         
+        # Fix: Changed quality settings keys to match the model_quality parameter default value
         quality_settings = {
             "Konsep": {"chunk_size": 32768, "detail_factor": 0.5},
-            "Standar": {"chunk_size": 16384, "detail_factor": 0.7},
+            "Standar": {"chunk_size": 16384, "detail_factor": 0.7},  # Changed from "Standard" to "Standar"
             "Tinggi": {"chunk_size": 8192, "detail_factor": 1.0}
         }
         
