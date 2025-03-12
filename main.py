@@ -462,7 +462,7 @@ def run_example(image_pil):
         "Standar", 7, 0.3
     )
     # Return an updated button for preview download instead of the animation image
-    download_button = gr.Button.update(visible=True)
+    download_button = gr.update(visible=True)
     return preprocessed, download_button, mesh_obj, mesh_glb, f1, uhd, tmd, cd, iou, metrics_text, radar_chart, bar_chart, animation_path
 
 
@@ -630,17 +630,17 @@ Unggah gambar untuk menghasilkan model 3D dengan parameter yang dapat disesuaika
     evaluation_info_md = gr.Markdown(visible=False)
     
     def show_evaluation_info():
-        return evaluation_info_md.update(visible=True), evaluation_info.update(visible=False)
+        return gr.update(visible=True), gr.update(visible=False)
     
     evaluation_info.click(
         fn=show_evaluation_info,
         inputs=[],
-        outputs=[evaluation_info_md],
+        outputs=[evaluation_info_md, evaluation_info],
     )
     
     # Function to update the download button and animation file
     def update_animation_download(animation_path):
-        return gr.Button.update(visible=True), animation_path
+        return gr.update(visible=True), animation_path
     
     # Connect the download button to the animation file
     preview_download.click(
