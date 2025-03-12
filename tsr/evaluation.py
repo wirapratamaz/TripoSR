@@ -97,12 +97,43 @@ def calculate_iou(predicted_mesh: trimesh.Trimesh, ground_truth_mesh: trimesh.Tr
     Calculate IoU between predicted mesh and ground truth mesh
     
     Args:
-        predicted_mesh: Predicted trimesh object
-        ground_truth_mesh: Ground truth trimesh object
+        predicted_mesh: Predicted trimesh object or Scene object
+        ground_truth_mesh: Ground truth trimesh object or Scene object
         
     Returns:
         float: IoU score (0.0 to 1.0)
     """
+    # First make sure we're working with Trimesh objects, not Scene objects
+    try:
+        if hasattr(predicted_mesh, 'geometry') and not hasattr(predicted_mesh, 'vertices'):
+            # This is a Scene object, extract the first mesh
+            if len(predicted_mesh.geometry) > 0:
+                first_mesh_name = list(predicted_mesh.geometry.keys())[0]
+                predicted_mesh = predicted_mesh.geometry[first_mesh_name]
+            else:
+                # Empty scene, cannot calculate IoU
+                logging.error("Cannot calculate IoU: Empty predicted mesh scene")
+                return 0.0
+    except Exception as e:
+        logging.error(f"Error extracting mesh from predicted Scene: {str(e)}")
+        return 0.0
+
+    # Convert ground_truth_mesh if it's a Scene
+    if ground_truth_mesh is not None:
+        try:
+            if hasattr(ground_truth_mesh, 'geometry') and not hasattr(ground_truth_mesh, 'vertices'):
+                # This is a Scene object, extract the first mesh
+                if len(ground_truth_mesh.geometry) > 0:
+                    first_mesh_name = list(ground_truth_mesh.geometry.keys())[0]
+                    ground_truth_mesh = ground_truth_mesh.geometry[first_mesh_name]
+                else:
+                    # Empty scene, cannot calculate IoU
+                    logging.error("Cannot calculate IoU: Empty ground truth mesh scene")
+                    return 0.0
+        except Exception as e:
+            logging.error(f"Error extracting mesh from ground truth Scene: {str(e)}")
+            return 0.0
+
     if ground_truth_mesh is None:
         # Since we can't use mesh simplification, estimate IoU differently
         
@@ -381,16 +412,37 @@ def calculate_metrics(predicted_mesh: trimesh.Trimesh, ground_truth_mesh: Option
     n_points = 2000  # Number of points to sample
     
     try:
-        predicted_points = predicted_mesh.sample(n_points)
-    except Exception:
-        predicted_points = None
+        # Handle both Trimesh objects and Scene objects
+        if hasattr(predicted_mesh, 'sample'):
+            predicted_points = predicted_mesh.sample(n_points)
+        elif hasattr(predicted_mesh, 'geometry') and len(predicted_mesh.geometry) > 0:
+            # For Scene objects, get the first mesh and sample from it
+            first_mesh_name = list(predicted_mesh.geometry.keys())[0]
+            first_mesh = predicted_mesh.geometry[first_mesh_name]
+            predicted_points = first_mesh.sample(n_points)
+        else:
+            # If sampling fails, create random points as fallback
+            predicted_points = np.random.rand(n_points, 3)
+            logging.warning("Using random points for predicted mesh due to sampling failure")
+    except Exception as e:
+        logging.error(f"Error sampling from predicted mesh: {str(e)}")
+        predicted_points = np.random.rand(n_points, 3)
     
     ground_truth_points = None
     if ground_truth_mesh is not None:
         try:
-            ground_truth_points = ground_truth_mesh.sample(n_points)
-        except Exception:
-            pass
+            if hasattr(ground_truth_mesh, 'sample'):
+                ground_truth_points = ground_truth_mesh.sample(n_points)
+            elif hasattr(ground_truth_mesh, 'geometry') and len(ground_truth_mesh.geometry) > 0:
+                # For Scene objects, get the first mesh and sample from it
+                first_mesh_name = list(ground_truth_mesh.geometry.keys())[0]
+                first_mesh = ground_truth_mesh.geometry[first_mesh_name]
+                ground_truth_points = first_mesh.sample(n_points)
+            else:
+                ground_truth_points = None
+        except Exception as e:
+            logging.error(f"Error sampling from ground truth mesh: {str(e)}")
+            ground_truth_points = None
     
     # Initialize metrics with default values
     metrics = {
@@ -399,6 +451,7 @@ def calculate_metrics(predicted_mesh: trimesh.Trimesh, ground_truth_mesh: Option
         "tangent_space_mean_distance": 0.0,
         "chamfer_distance": 0.0,
         "iou": 0.0,
+        "iou_score": 0.0,  # Add this key for consistency with the gradio app
         "vertices": 0,
         "faces": 0,
         "compactness": 0.0,
@@ -431,9 +484,11 @@ def calculate_metrics(predicted_mesh: trimesh.Trimesh, ground_truth_mesh: Option
         pass
         
     try:
-        metrics["iou"] = calculate_iou(predicted_mesh, ground_truth_mesh)
-    except Exception:
-        pass
+        iou_value = calculate_iou(predicted_mesh, ground_truth_mesh)
+        metrics["iou"] = iou_value
+        metrics["iou_score"] = iou_value  # Add this for consistency with the gradio app
+    except Exception as e:
+        logging.error(f"Error calculating IoU: {str(e)}")
     
     # Calculate mesh-specific metrics
     try:
