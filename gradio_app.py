@@ -360,6 +360,8 @@ def generate(image, mc_resolution, reference_model=None, formats=["obj", "glb"],
                 metrics_text += f"Chamfer Distance: {metrics['chamfer_distance']:.4f}\n"
             if 'iou_score' in metrics:
                 metrics_text += f"IoU Score: {metrics['iou_score']:.4f}"
+            elif 'iou' in metrics:  # Check for iou key as a fallback
+                metrics_text += f"IoU Score: {metrics['iou']:.4f}"
         else:
             metrics_text = f"Self-evaluation metrics:\n"
             if 'f1_score' in metrics:
@@ -372,6 +374,8 @@ def generate(image, mc_resolution, reference_model=None, formats=["obj", "glb"],
                 metrics_text += f"Chamfer Distance: {metrics['chamfer_distance']:.4f}\n"
             if 'iou_score' in metrics:
                 metrics_text += f"IoU Score: {metrics['iou_score']:.4f}\n"
+            elif 'iou' in metrics:  # Check for iou key as a fallback
+                metrics_text += f"IoU Score: {metrics['iou']:.4f}\n"
             metrics_text += f"Note: For more accurate metrics, provide a reference model."
         
         # Save files with permanent paths
@@ -398,7 +402,8 @@ def generate(image, mc_resolution, reference_model=None, formats=["obj", "glb"],
             metrics.get("uniform_hausdorff_distance", 0.0),
             metrics.get("tangent_space_mean_distance", 0.0),
             metrics.get("chamfer_distance", 0.0),
-            metrics.get("iou_score", 0.0),
+            # Try iou_score first, then fall back to iou if needed
+            metrics.get("iou_score", metrics.get("iou", 0.0)),
             metrics_text,
             radar_chart,
             bar_chart
