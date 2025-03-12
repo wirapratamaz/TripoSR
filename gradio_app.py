@@ -588,7 +588,7 @@ Unggah gambar untuk menghasilkan model 3D dengan parameter yang dapat disesuaika
     evaluation_info_md = gr.Markdown(visible=False)
     
     def show_evaluation_info():
-        return gr.Markdown.update(visible=True), gr.Markdown.update(visible=False)
+        return evaluation_info_md.update(visible=True), evaluation_info.update(visible=False)
     
     evaluation_info.click(
         fn=show_evaluation_info,

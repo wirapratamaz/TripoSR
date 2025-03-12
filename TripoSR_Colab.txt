@@ -10,6 +10,8 @@
 !git pull origin main
 
 # Install basic dependencies
+!apt-get install -y libspatialindex-dev
+!pip install rtree>=1.0.0
 !pip install -q trimesh omegaconf einops rembg
 
 # Install torchmcubes with CUDA support
