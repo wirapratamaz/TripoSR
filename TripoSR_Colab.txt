@@ -10,6 +10,8 @@
 !git pull origin main
 
 # Install basic dependencies
+!apt-get install -y libspatialindex-dev
+!pip install rtree>=1.0.0
 !pip install -q trimesh omegaconf einops rembg
 
 # Install torchmcubes with CUDA support
@@ -31,99 +33,8 @@
 # First uninstall any existing gradio installation to avoid conflicts
 !pip uninstall -y gradio
 
-# Install very specific version of Gradio known to work with Plot components
-!pip install gradio==3.9.0
-
-# IMPORTANT: Modify the gradio_app.py file directly to fix the issue
-# This approach is more reliable than using a patching script
-!cat > fix_gradio_app.py << 'EOL'
-import re
-
-# Read the current content of the file
-with open('gradio_app.py', 'r') as file:
-    content = file.read()
-
-# Fix 1: Modify the run_example function to handle numpy.float64 values
-run_example_pattern = r'def run_example\(image_pil\):(.*?)return \[preprocessed\] \+ result'
-run_example_replacement = """def run_example(image_pil):
-    preprocessed = preprocess(image_pil, False, 0.9)
-    result = generate(
-        preprocessed, 128, None, ["obj", "glb"],
-        "Standard", 7, 0.3
-    )
-    
-    # Process results to ensure all numpy types are converted to Python types
-    processed_result = []
-    for item in result:
-        if hasattr(item, 'dtype') and 'float' in str(item.dtype):
-            processed_result.append(float(item))  # Convert numpy float to Python float
-        elif hasattr(item, 'dtype') and 'int' in str(item.dtype):
-            processed_result.append(int(item))    # Convert numpy int to Python int
-        else:
-            processed_result.append(item)
-    
-    # Return each value explicitly to ensure correct mapping to UI components
-    return [
-        preprocessed,           # processed_image
-        processed_result[0],    # output_model_obj
-        processed_result[1],    # output_model_glb
-        processed_result[4],    # f1_metric
-        processed_result[5],    # uhd_metric
-        processed_result[6],    # tmd_metric
-        processed_result[7],    # chamfer_distance
-        processed_result[8],    # iou
-        processed_result[9],    # metrics_text
-        processed_result[10],   # radar_plot
-        processed_result[11]    # bar_plot
-    ]"""
-
-# Apply the run_example replacement
-updated_content = re.sub(run_example_pattern, run_example_replacement, content, flags=re.DOTALL)
-
-# Fix 2: Add a safety wrapper around the postprocess method of Plot component
-# This ensures that even if a float gets passed, it won't cause an error
-plot_fix = """
-# Monkey patch Gradio's Plot component to handle numpy values safely
-from gradio.components.plot import Plot
-original_postprocess = Plot.postprocess
-
-def safe_postprocess(self, value):
-    try:
-        if hasattr(value, 'dtype') and ('float' in str(value.dtype) or 'int' in str(value.dtype)):
-            import matplotlib.pyplot as plt
-            fig = plt.figure()
-            plt.text(0.5, 0.5, f"Value: {value}", ha='center', va='center')
-            plt.tight_layout()
-            return fig
-        return original_postprocess(self, value)
-    except Exception as e:
-        import matplotlib.pyplot as plt
-        fig = plt.figure()
-        plt.text(0.5, 0.5, f"Error processing plot: {str(e)}", ha='center', va='center')
-        plt.tight_layout()
-        return fig
-
-Plot.postprocess = safe_postprocess
-
-"""
-
-# Add the monkey patch at the beginning of the file, after imports
-import_section_end = content.find("import time")
-if import_section_end > 0:
-    updated_content = content[:import_section_end] + "import time\n" + plot_fix + content[import_section_end+len("import time\n"):]
-
-# Write the modified content back to the file
-with open('gradio_app.py', 'w') as file:
-    file.write(updated_content)
-
-print("Successfully modified gradio_app.py to handle numpy values safely")
-EOL
-
-# Execute the fix script
-!python fix_gradio_app.py
-
-# Install from requirements.txt with --no-deps to avoid overriding our Gradio version
-!pip install -r requirements.txt --no-deps
+# Install from requirements.txt
+!pip install -r requirements.txt
 
 # Set up environment variables for better GPU memory management
 import os
