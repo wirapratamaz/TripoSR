@@ -44,7 +44,7 @@ For detailed usage of this script, use `python run.py --help`.
 
 ### Local Gradio App
 ```sh
-python gradio_app.py
+python main.py
 ```
 
 ## Troubleshooting

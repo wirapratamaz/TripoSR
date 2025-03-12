@@ -53,7 +53,7 @@ if torch.cuda.is_available():
 ```python
 # Run the Gradio app with lower resolution for faster processing
 %cd /content/TripoSR
-!python gradio_app.py --queuesize 1 --share
+!python main.py --queuesize 1 --share
 ```
 
 ## Troubleshooting Blank Model Output
@@ -70,7 +70,7 @@ If you're experiencing blank model output after 30 minutes, try these solutions:
 3. **Modify the chunk size**
    - Add this line to Cell 2 before running the app:
    ```python
-   !python gradio_app.py --queuesize 1 --share --chunk-size 4096
+   !python main.py --queuesize 1 --share --chunk-size 4096
    ```
 
 4. **Check your downloaded OBJ file**

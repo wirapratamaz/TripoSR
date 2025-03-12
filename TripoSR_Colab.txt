@@ -52,4 +52,4 @@ if torch.cuda.is_available():
 
 # Run the Gradio app
 %cd /content/TripoSR
-!python gradio_app.py --queuesize 1 --share
+!python main.py --queuesize 1 --share
