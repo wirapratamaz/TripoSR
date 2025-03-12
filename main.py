@@ -440,12 +440,6 @@ def generate(image, mc_resolution, reference_model=None, formats=["obj", "glb"],
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
             
-        # Use the first frame of the animation as the preview image
-        preview_image = render_images[0][0]
-        
-        # Add preview image as the first element in return values
-        rv.insert(0, preview_image)
-            
         # Add animation_path to the return values
         rv.append(animation_path)
             
@@ -463,11 +457,13 @@ def generate(image, mc_resolution, reference_model=None, formats=["obj", "glb"],
 
 def run_example(image_pil):
     preprocessed = preprocess(image_pil, False, 0.9)
-    preview_image, mesh_obj, mesh_glb, f1, uhd, tmd, cd, iou, metrics_text, radar_chart, bar_chart, animation_path = generate(
+    mesh_obj, mesh_glb, f1, uhd, tmd, cd, iou, metrics_text, radar_chart, bar_chart, animation_path = generate(
         preprocessed, 128, None, ["obj", "glb"],
         "Standar", 7, 0.3
     )
-    return preprocessed, preview_image, mesh_obj, mesh_glb, f1, uhd, tmd, cd, iou, metrics_text, radar_chart, bar_chart, animation_path
+    # Return an updated button for preview download instead of the animation image
+    download_button = gr.Button.update(visible=True)
+    return preprocessed, download_button, mesh_obj, mesh_glb, f1, uhd, tmd, cd, iou, metrics_text, radar_chart, bar_chart, animation_path
 
 
 with gr.Blocks(title="3D Model Generation") as interface:
@@ -557,13 +553,7 @@ Unggah gambar untuk menghasilkan model 3D dengan parameter yang dapat disesuaika
             with gr.Tabs():
                 with gr.TabItem("3D Visualization"):
                     with gr.Row():
-                        preview_animation = gr.Image(
-                            label="360° Preview",
-                            show_label=True,
-                            interactive=False
-                        )
-                    with gr.Row():    
-                        preview_download = gr.Button("⬇️ Download Animation GIF", visible=False)
+                        preview_download = gr.Button("⬇️ Download Animation GIF (360° Rotation)", visible=False)
                         animation_file = gr.File(visible=False, interactive=False)
                     with gr.Row():
                         output_model_obj = gr.Model3D(
@@ -629,7 +619,7 @@ Unggah gambar untuk menghasilkan model 3D dengan parameter yang dapat disesuaika
                 "examples/pintu-belok.png",
             ],
             inputs=[input_image],
-            outputs=[processed_image, preview_animation, output_model_obj, output_model_glb, f1_metric, uhd_metric, tmd_metric, cd_metric, iou_metric, metrics_text, radar_plot, bar_plot, animation_file],
+            outputs=[processed_image, preview_download, output_model_obj, output_model_glb, f1_metric, uhd_metric, tmd_metric, cd_metric, iou_metric, metrics_text, radar_plot, bar_plot, animation_file],
             cache_examples=False,
             fn=partial(run_example),
             label="Contoh",
@@ -680,7 +670,6 @@ Unggah gambar untuk menghasilkan model 3D dengan parameter yang dapat disesuaika
             smoothing_factor
         ],
         outputs=[
-            preview_animation,  # First output is the preview image (the first frame of animation)
             output_model_obj, 
             output_model_glb,
             f1_metric,
