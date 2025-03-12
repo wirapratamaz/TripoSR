@@ -4,7 +4,6 @@ import tempfile
 import time
 
 import gradio as gr
-from gradio.blocks import Blocks
 import numpy as np
 import rembg
 import torch
@@ -465,7 +464,7 @@ def run_example(image_pil):
     return preprocessed, mesh_obj, mesh_glb, f1, uhd, tmd, cd, iou, metrics_text, radar_chart, bar_chart, animation_path
 
 
-with Blocks(title="3D Model Generation") as interface:
+with gr.Blocks(title="3D Model Generation") as interface:
     gr.Markdown(
         """    
 # Generasi Model 3D dari Gambar
