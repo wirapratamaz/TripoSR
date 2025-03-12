@@ -440,6 +440,9 @@ def generate(image, mc_resolution, reference_model=None, formats=["obj", "glb"],
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
             
+        # Add animation_path to the return values
+        rv.append(animation_path)
+            
         return rv
     except RuntimeError as e:
         if "CUDA out of memory" in str(e):
@@ -454,11 +457,11 @@ def generate(image, mc_resolution, reference_model=None, formats=["obj", "glb"],
 
 def run_example(image_pil):
     preprocessed = preprocess(image_pil, False, 0.9)
-    mesh_obj, mesh_glb, f1, uhd, tmd, cd, iou, metrics_text, radar_chart, bar_chart = generate(
+    mesh_obj, mesh_glb, f1, uhd, tmd, cd, iou, metrics_text, radar_chart, bar_chart, animation_path = generate(
         preprocessed, 128, None, ["obj", "glb"],
         "Standar", 7, 0.3
     )
-    return preprocessed, mesh_obj, mesh_glb, f1, uhd, tmd, cd, iou, metrics_text, radar_chart, bar_chart
+    return preprocessed, mesh_obj, mesh_glb, f1, uhd, tmd, cd, iou, metrics_text, radar_chart, bar_chart, animation_path
 
 
 with gr.Blocks(title="3D Model Generation") as interface:
@@ -553,6 +556,9 @@ Unggah gambar untuk menghasilkan model 3D dengan parameter yang dapat disesuaika
                             show_label=True,
                             interactive=False
                         )
+                    with gr.Row():    
+                        preview_download = gr.Button("⬇️ Download Animation GIF", visible=False)
+                        animation_file = gr.File(visible=False, interactive=False)
                     with gr.Row():
                         output_model_obj = gr.Model3D(
                             label="Model 3D (OBJ)",
@@ -617,7 +623,7 @@ Unggah gambar untuk menghasilkan model 3D dengan parameter yang dapat disesuaika
                 "examples/pintu-belok.png",
             ],
             inputs=[input_image],
-            outputs=[processed_image, output_model_obj, output_model_glb, f1_metric, uhd_metric, tmd_metric, cd_metric, iou_metric, metrics_text, radar_plot, bar_plot],
+            outputs=[processed_image, output_model_obj, output_model_glb, f1_metric, uhd_metric, tmd_metric, cd_metric, iou_metric, metrics_text, radar_plot, bar_plot, animation_file],
             cache_examples=False,
             fn=partial(run_example),
             label="Contoh",
@@ -634,6 +640,17 @@ Unggah gambar untuk menghasilkan model 3D dengan parameter yang dapat disesuaika
         fn=show_evaluation_info,
         inputs=[],
         outputs=[evaluation_info_md],
+    )
+    
+    # Function to update the download button and animation file
+    def update_animation_download(animation_path):
+        return gr.Button.update(visible=True), animation_path
+    
+    # Connect the download button to the animation file
+    preview_download.click(
+        fn=lambda x: x,
+        inputs=[animation_file],
+        outputs=[animation_file],
     )
         
     submit.click(fn=check_input_image, inputs=[input_image]).success(
@@ -667,8 +684,13 @@ Unggah gambar untuk menghasilkan model 3D dengan parameter yang dapat disesuaika
             iou_metric,
             metrics_text,
             radar_plot,
-            bar_plot
+            bar_plot,
+            animation_file
         ]
+    ).success(
+        fn=update_animation_download,
+        inputs=[animation_file],
+        outputs=[preview_download, animation_file]
     )
 
 
