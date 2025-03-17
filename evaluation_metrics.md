@@ -23,11 +23,55 @@ These metrics evaluate the quality of reconstruction by comparing the generated 
 
 ### 3. Tangent-Space Mean Distance (TMD)
 
-- **Description**: Measures the average distance between points when projected onto the tangent plane, emphasizing local surface alignment rather than global positioning.
-- **Range**: 0.0 to ∞ (lower is better)
-- **Interpretation**: A value close to 0 indicates that the model's surfaces have similar local geometric properties as the ground truth.
-- **Note**: This metric is more sensitive to fine geometric details than purely point-based metrics.
-- **Mathematical definition**: The average of distances between points after projecting displacements to tangent spaces.
+The Tangent-Space Mean Distance measures the dissimilarity between two meshes in terms of their local surface properties. Unlike Chamfer Distance which only considers point positions, TMD considers the tangential components of the displacement vectors between mesh points, providing a more accurate measure of surface discrepancy.
+
+### Recent Enhancements
+
+The TMD calculation has been improved with adaptive sampling techniques to provide more accurate results for meshes of varying complexity:
+
+1. **Dynamic Sample Point Calculation**:
+   - Previously: Fixed 2000 sample points regardless of mesh complexity
+   - Now: Sample count is dynamically calculated based on:
+     - Surface area (larger surfaces get more samples)
+     - Vertex and face count (more complex meshes get more samples)
+     - Local curvature (areas with high curvature get more detailed sampling)
+
+2. **Performance Optimizations**:
+   - KD-tree based nearest neighbor search, drastically improving speed for complex meshes
+   - Spatial locality exploitation using adaptive search radius
+   - Fallback implementation for edge cases
+
+3. **Robustness Improvements**:
+   - Enhanced error handling for edge cases
+   - Protection against numerical instabilities
+   - Proper normalization of vectors
+
+This improved implementation provides more reliable TMD measurements across meshes of different sizes and complexities, while maintaining reasonable computational performance.
+
+### Technical Details
+
+The sample count is calculated using:
+```python
+def calculate_optimal_sample_points(mesh):
+    # Base count from surface area
+    base_samples = int(np.sqrt(mesh.area) * 100)
+    
+    # Adjust for complexity
+    complexity_factor = np.log10(max(1, vertex_count * face_count)) / 5
+    
+    # Adjust for curvature
+    # Higher curvature = more samples
+    curvature_factor = 1.0 + min(3.0, avg_curvature * 5.0)
+    
+    # Calculate and clamp final count
+    sample_count = int(base_samples * complexity_factor * curvature_factor)
+    return max(min_samples, min(sample_count, max_samples))
+```
+
+To test the enhanced TMD calculation, run:
+```
+python test_evaluation.py --adaptive
+```
 
 ### 4. Chamfer Distance (CD)
 
