@@ -355,7 +355,7 @@ def generate(image, mc_resolution, reference_model=None, formats=["obj", "glb"],
             if 'uniform_hausdorff_distance' in metrics:
                 metrics_text += f"Uniform Hausdorff Distance: {metrics['uniform_hausdorff_distance']:.4f}\n"
             if 'tangent_space_mean_distance' in metrics:
-                metrics_text += f"Total Mutual Difference: {metrics['tangent_space_mean_distance']:.4f} (higher is better)\n"
+                metrics_text += f"Total Mutual Difference: {metrics['tangent_space_mean_distance']:.4f} (higher is better, simulating diversity)\n"
             if 'chamfer_distance' in metrics:
                 metrics_text += f"Chamfer Distance: {metrics['chamfer_distance']:.4f}\n"
             if 'iou_score' in metrics:
@@ -369,7 +369,7 @@ def generate(image, mc_resolution, reference_model=None, formats=["obj", "glb"],
             if 'uniform_hausdorff_distance' in metrics:
                 metrics_text += f"Uniform Hausdorff Distance: {metrics['uniform_hausdorff_distance']:.4f}\n"
             if 'tangent_space_mean_distance' in metrics:
-                metrics_text += f"Total Mutual Difference: {metrics['tangent_space_mean_distance']:.4f} (higher is better)\n"
+                metrics_text += f"Total Mutual Difference: {metrics['tangent_space_mean_distance']:.4f} (higher is better, simulating diversity)\n"
             if 'chamfer_distance' in metrics:
                 metrics_text += f"Chamfer Distance: {metrics['chamfer_distance']:.4f}\n"
             if 'iou_score' in metrics:
@@ -566,7 +566,7 @@ Unggah gambar untuk menghasilkan model 3D dengan parameter yang dapat disesuaika
                     **Petunjuk Metrik:**
                     - **F1 Score**: Mengukur keseimbangan antara presisi dan recall. Nilai lebih tinggi (0-1) menunjukkan kecocokan permukaan yang lebih baik.
                     - **Uniform Hausdorff Distance (UHD)**: Mengukur jarak maksimum antara permukaan mesh. Nilai lebih rendah menunjukkan kesamaan bentuk yang lebih baik.
-                    - **Total Mutual Difference (TMD)**: Mengukur keragaman antara bentuk 3D yang berbeda dengan menghitung rata-rata jarak Chamfer antara pasangan bentuk. Nilai lebih tinggi menunjukkan keragaman yang lebih besar (lebih baik).
+                    - **Total Mutual Difference (TMD)**: Mengukur keragaman antara bentuk 3D yang berbeda dengan menghitung rata-rata jarak Chamfer antara pasangan bentuk. Implementasi ini mensimulasikan keragaman dengan membuat variasi dari model Anda. Nilai lebih tinggi menunjukkan keragaman yang lebih besar (lebih baik).
                     - **Chamfer Distance (CD)**: Mengukur jarak rata-rata antar titik. Nilai lebih rendah menunjukkan kecocokan bentuk yang lebih baik.
                     - **IoU Score**: Mengukur volume tumpang tindih. Nilai lebih tinggi (0-1) menunjukkan kesamaan volume yang lebih baik.
                     
