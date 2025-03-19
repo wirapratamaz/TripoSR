@@ -21,57 +21,35 @@ These metrics evaluate the quality of reconstruction by comparing the generated 
 - **Note**: Without ground truth, this metric estimates the maximum deviation from a simplified version of the mesh.
 - **Mathematical definition**: UHD = max(max(min(d(p, gt)) for p in predicted), max(min(d(gt, p)) for gt in ground_truth))
 
-### 3. Tangent-Space Mean Distance (TMD)
+### 3. Total Mutual Difference (TMD)
 
-The Tangent-Space Mean Distance measures the dissimilarity between two meshes in terms of their local surface properties. Unlike Chamfer Distance which only considers point positions, TMD considers the tangential components of the displacement vectors between mesh points, providing a more accurate measure of surface discrepancy.
+- **Description**: Measures the diversity between different possible completions of a 3D shape by calculating the average Chamfer distance between pairs of shapes.
+- **Range**: 0.0 to ∞ (higher is better)
+- **Interpretation**: Higher values indicate greater diversity among generated shapes, representing a model's ability to produce varied outputs for the same input.
+- **Note**: Unlike other metrics where lower values are better, for TMD, higher values are desirable as they indicate more diverse outputs.
+- **Key Distinction**: TMD evaluates diversity among multiple generated shapes, not similarity to a reference shape, making it fundamentally different from metrics like CD and UHD.
 
-### Recent Enhancements
+#### Mathematical Definition
 
-The TMD calculation has been improved with adaptive sampling techniques to provide more accurate results for meshes of varying complexity:
+TMD is calculated as the average Chamfer distance between all pairs of completed shapes:
 
-1. **Dynamic Sample Point Calculation**:
-   - Previously: Fixed 2000 sample points regardless of mesh complexity
-   - Now: Sample count is dynamically calculated based on:
-     - Surface area (larger surfaces get more samples)
-     - Vertex and face count (more complex meshes get more samples)
-     - Local curvature (areas with high curvature get more detailed sampling)
-
-2. **Performance Optimizations**:
-   - KD-tree based nearest neighbor search, drastically improving speed for complex meshes
-   - Spatial locality exploitation using adaptive search radius
-   - Fallback implementation for edge cases
-
-3. **Robustness Improvements**:
-   - Enhanced error handling for edge cases
-   - Protection against numerical instabilities
-   - Proper normalization of vectors
-
-This improved implementation provides more reliable TMD measurements across meshes of different sizes and complexities, while maintaining reasonable computational performance.
-
-### Technical Details
-
-The sample count is calculated using:
-```python
-def calculate_optimal_sample_points(mesh):
-    # Base count from surface area
-    base_samples = int(np.sqrt(mesh.area) * 100)
-    
-    # Adjust for complexity
-    complexity_factor = np.log10(max(1, vertex_count * face_count)) / 5
-    
-    # Adjust for curvature
-    # Higher curvature = more samples
-    curvature_factor = 1.0 + min(3.0, avg_curvature * 5.0)
-    
-    # Calculate and clamp final count
-    sample_count = int(base_samples * complexity_factor * curvature_factor)
-    return max(min_samples, min(sample_count, max_samples))
+```
+TMD = (1/n(n-1)) * ∑_{i=1}^{n} ∑_{j=i+1}^{n} CD(S_i, S_j)
 ```
 
-To test the enhanced TMD calculation, run:
-```
-python test_evaluation.py --adaptive
-```
+Where:
+- n is the number of shape completions being compared
+- S_i and S_j are different completed shapes
+- CD is the Chamfer distance function
+
+#### Application in 3D Generation
+
+TMD is particularly valuable for evaluating:
+- Multi-modal shape completion tasks
+- Generative models that should produce diverse outputs
+- Models that capture the full spectrum of possible shapes for a given input
+
+When using TMD for evaluation, it's important to generate multiple completions from the same input to properly measure the diversity of the model's outputs.
 
 ### 4. Chamfer Distance (CD)
 

@@ -51,7 +51,7 @@ def create_metrics_radar_chart(current_metrics):
     metrics_to_show = {
         'f1_score': {'display': 'F1', 'invert': False},
         'uniform_hausdorff_distance': {'display': 'UHD', 'invert': True},
-        'tangent_space_mean_distance': {'display': 'TMD', 'invert': True},
+        'tangent_space_mean_distance': {'display': 'TMD', 'invert': False},
         'chamfer_distance': {'display': 'CD', 'invert': True},
         'iou_score': {'display': 'IoU', 'invert': False}
     }
@@ -144,8 +144,8 @@ def create_metrics_bar_chart(current_metrics):
     metrics_to_show = {
         'f1_score': {'display': 'F1 Score (↑)', 'color': 'purple'},
         'uniform_hausdorff_distance': {'display': 'UHD (↓)', 'color': 'red'},
-        'tangent_space_mean_distance': {'display': 'TMD (↓)', 'color': 'orange'},
-        'chamfer_distance': {'display': 'CD (↓)', 'color': 'green'},
+        'tangent_space_mean_distance': {'display': 'TMD (↑)', 'color': 'green'},
+        'chamfer_distance': {'display': 'CD (↓)', 'color': 'orange'},
         'iou_score': {'display': 'IoU (↑)', 'color': 'blue'}
     }
     
@@ -355,7 +355,7 @@ def generate(image, mc_resolution, reference_model=None, formats=["obj", "glb"],
             if 'uniform_hausdorff_distance' in metrics:
                 metrics_text += f"Uniform Hausdorff Distance: {metrics['uniform_hausdorff_distance']:.4f}\n"
             if 'tangent_space_mean_distance' in metrics:
-                metrics_text += f"Tangent-Space Mean Distance: {metrics['tangent_space_mean_distance']:.4f}\n"
+                metrics_text += f"Total Mutual Difference: {metrics['tangent_space_mean_distance']:.4f} (higher is better)\n"
             if 'chamfer_distance' in metrics:
                 metrics_text += f"Chamfer Distance: {metrics['chamfer_distance']:.4f}\n"
             if 'iou_score' in metrics:
@@ -369,7 +369,7 @@ def generate(image, mc_resolution, reference_model=None, formats=["obj", "glb"],
             if 'uniform_hausdorff_distance' in metrics:
                 metrics_text += f"Uniform Hausdorff Distance: {metrics['uniform_hausdorff_distance']:.4f}\n"
             if 'tangent_space_mean_distance' in metrics:
-                metrics_text += f"Tangent-Space Mean Distance: {metrics['tangent_space_mean_distance']:.4f}\n"
+                metrics_text += f"Total Mutual Difference: {metrics['tangent_space_mean_distance']:.4f} (higher is better)\n"
             if 'chamfer_distance' in metrics:
                 metrics_text += f"Chamfer Distance: {metrics['chamfer_distance']:.4f}\n"
             if 'iou_score' in metrics:
@@ -531,7 +531,7 @@ Unggah gambar untuk menghasilkan model 3D dengan parameter yang dapat disesuaika
                     with gr.Row():
                         f1_metric = gr.Number(label="F1 Score", value=0.0, precision=4)
                         uhd_metric = gr.Number(label="Uniform Hausdorff Distance", value=0.0, precision=4)
-                        tmd_metric = gr.Number(label="Tangent-Space Mean Distance", value=0.0, precision=4)
+                        tmd_metric = gr.Number(label="Total Mutual Difference", value=0.0, precision=4)
                         cd_metric = gr.Number(label="Chamfer Distance", value=0.0, precision=4)
                         iou_metric = gr.Number(label="IoU Score", value=0.0, precision=4)
                     
@@ -556,8 +556,8 @@ Unggah gambar untuk menghasilkan model 3D dengan parameter yang dapat disesuaika
                     ### Nilai Metrik Saat Ini
                     
                     Diagram batang di bawah menunjukkan nilai absolut dari metrik saat ini.
-                    UHD, TMD, CD: nilai lebih rendah lebih baik (↓)
-                    IoU: nilai lebih tinggi lebih baik (↑)
+                    UHD, CD: nilai lebih rendah lebih baik (↓)
+                    TMD, F1, IoU: nilai lebih tinggi lebih baik (↑)
                     """)
                     with gr.Row():
                         bar_plot = gr.Plot(label="Nilai Metrik Saat Ini", show_label=False)
@@ -566,7 +566,7 @@ Unggah gambar untuk menghasilkan model 3D dengan parameter yang dapat disesuaika
                     **Petunjuk Metrik:**
                     - **F1 Score**: Mengukur keseimbangan antara presisi dan recall. Nilai lebih tinggi (0-1) menunjukkan kecocokan permukaan yang lebih baik.
                     - **Uniform Hausdorff Distance (UHD)**: Mengukur jarak maksimum antara permukaan mesh. Nilai lebih rendah menunjukkan kesamaan bentuk yang lebih baik.
-                    - **Tangent-Space Mean Distance (TMD)**: Mengukur jarak rata-rata pada ruang tangensial. Nilai lebih rendah menunjukkan kesamaan bentuk lokal yang lebih baik.
+                    - **Total Mutual Difference (TMD)**: Mengukur keragaman antara bentuk 3D yang berbeda dengan menghitung rata-rata jarak Chamfer antara pasangan bentuk. Nilai lebih tinggi menunjukkan keragaman yang lebih besar (lebih baik).
                     - **Chamfer Distance (CD)**: Mengukur jarak rata-rata antar titik. Nilai lebih rendah menunjukkan kecocokan bentuk yang lebih baik.
                     - **IoU Score**: Mengukur volume tumpang tindih. Nilai lebih tinggi (0-1) menunjukkan kesamaan volume yang lebih baik.
                     
