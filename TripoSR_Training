@@ -27,11 +27,7 @@
 !pip install -q onnxruntime
 !pip install scipy>=1.11.0
 !pip install -q aiofiles fastapi pandas orjson typing-extensions
-!pip install -q moderngl  # Add this line to fix the error
-
-# First uninstall any existing gradio installation to avoid conflicts
-!pip uninstall -y gradio
-!pip install gradio
+!pip install -q moderngl  # For baking textures
 
 # Install from requirements.txt
 !pip install -r requirements.txt
@@ -52,6 +48,7 @@ if torch.cuda.is_available():
 
 # Create a cell to upload your test image
 from google.colab import files
+print("Please upload your image:")
 uploaded = files.upload()
 
 # Get the filename of the uploaded image
@@ -66,5 +63,51 @@ shutil.copy(original_filename, safe_filename)
 print(f"Renamed '{original_filename}' to '{safe_filename}' for processing")
 
 # Run run.py with the uploaded image
+print("\n--- Running TripoSR model ---\n")
 %cd /content/TripoSR
 !python run.py {safe_filename} --device cuda:0 --chunk-size 8192 --mc-resolution 256 --output-dir test_output --model-save-format obj
+
+# Check if the mesh file exists and download it
+import os
+mesh_path = "/content/TripoSR/test_output/0/mesh.obj"
+mtl_path = "/content/TripoSR/test_output/0/mesh.mtl"
+input_img_path = "/content/TripoSR/test_output/0/input.png"
+texture_dir = "/content/TripoSR/test_output/0"
+
+print("\n--- Checking for generated files ---\n")
+
+files_to_download = []
+
+if os.path.exists(mesh_path):
+    print(f"3D model generated successfully at: {mesh_path}")
+    files_to_download.append(mesh_path)
+    
+    # If material file exists, download that too
+    if os.path.exists(mtl_path):
+        print(f"Material file found: {mtl_path}")
+        files_to_download.append(mtl_path)
+    
+    # Check for input image
+    if os.path.exists(input_img_path):
+        print(f"Processed input image found: {input_img_path}")
+        files_to_download.append(input_img_path)
+    
+    # Check for any texture images
+    import glob
+    textures = glob.glob(f"{texture_dir}/*.png") + glob.glob(f"{texture_dir}/*.jpg")
+    for texture in textures:
+        if "input.png" not in texture:  # Skip duplicating the input image
+            print(f"Texture found: {texture}")
+            files_to_download.append(texture)
+    
+    # Download all files
+    print("\n--- Downloading files ---\n")
+    from google.colab import files
+    for file_path in files_to_download:
+        print(f"Initiating download for: {file_path}")
+        files.download(file_path)
+    
+    print("\nAll downloads initiated. Check your browser's download dialog.")
+    print("Note: If files don't download automatically, you may need to allow pop-ups in your browser.")
+else:
+    print("Mesh file not found. Check the logs for errors.")
