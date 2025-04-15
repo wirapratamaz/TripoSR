@@ -1,67 +1,90 @@
-# TripoSR Fine-Tuning using BalineseMask3D Dataset
+# TripoSR Fine-Tuning Colab Notebook
 
-# 1. Setup and dependencies
-%%capture
-# Mount Google Drive for storing datasets and checkpoints
+## Cell 1: Setup and Dependencies
+
+# Mount Google Drive
 from google.colab import drive
 drive.mount('/content/drive')
 
-# Clone the repository (choose the appropriate branch)
+# Clone the repository
 !git clone https://github.com/wirapratamaz/TripoSR.git
 %cd /content/TripoSR
 
-# Use the training branch if it exists, otherwise use main
 !git checkout training
+!git pull origin training
 
-# Install all required dependencies
-!pip install -q trimesh omegaconf einops rembg
+# Install dependencies
+!pip install -q trimesh omegaconf einops rembg huggingface-hub==0.26.0 transformers==4.35.0
 !pip install -q git+https://github.com/tatsy/torchmcubes.git
-!pip install huggingface-hub==0.26.0
-!pip install transformers==4.35.0
-!pip install accelerate==0.20.3
-!pip install diffusers==0.14.0
-!pip install -q xatlas==0.0.9
-!pip install -q imageio[ffmpeg]
-!pip install -q onnxruntime
-!pip install scipy>=1.11.0
-!pip install matplotlib pandas tqdm
-!pip install -q aiofiles fastapi orjson typing-extensions
-!pip install -q moderngl
+!pip install -q xatlas==0.0.9 imageio[ffmpeg] matplotlib pandas tqdm
+!pip install -q moderngl scipy>=1.11.0
 !pip install -r requirements.txt
 
-# Set up environment variables for better GPU memory management
-import os
-os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'max_split_size_mb:128'
-
-# Verify CUDA availability
+# Check CUDA
 import torch
 print(f"CUDA available: {torch.cuda.is_available()}")
 if torch.cuda.is_available():
     print(f"CUDA device: {torch.cuda.get_device_name(0)}")
-    print(f"CUDA memory: {torch.cuda.get_device_properties(0).total_memory / 1e9:.2f} GB")
 
-# 2. Create the necessary directories for data and output
+## Cell 2: Create Directories
+
+# Create directories
 !mkdir -p /content/TripoSR/dataset/train
-!mkdir -p /content/TripoSR/dataset/val
-!mkdir -p /content/TripoSR/output
-!mkdir -p /content/TripoSR/evaluation
+# Mount Google Drive
+from google.colab import drive
+drive.mount('/content/drive')
 
-# 3. Create/modify the config.yaml file
-%%writefile /content/TripoSR/config.yaml
-data:
+# Clone the repository
+!git clone https://github.com/wirapratamaz/TripoSR.git
+%cd /content/TripoSR
+
+# Install dependencies
+!pip install -q trimesh omegaconf einops rembg huggingface-hub==0.26.0 transformers==4.35.0
+!pip install -q git+https://github.com/tatsy/torchmcubes.git
+!pip install -q xatlas==0.0.9 imageio[ffmpeg] matplotlib pandas tqdm
+!pip install -q moderngl scipy>=1.11.0
+!pip install -r requirements.txt
+
+# Check CUDA
+import torch
+print(f"CUDA available: {torch.cuda.is_available()}")
+if torch.cuda.is_available():
+    print(f"CUDA device: {torch.cuda.get_device_name(0)}")
+## Cell 3: Upload Config File
+
+# Upload config.yaml rather than trying to create it inline
+from google.colab import files
+import io
+import os
+
+# Either upload a config file or use the default one
+print("You can upload your own config.yaml or use the default one")
+print("To use the default, just click 'Skip' below")
+
+try:
+  uploaded = files.upload()  # This will prompt for file upload
+  if 'config.yaml' in uploaded:
+    print("Using uploaded config.yaml")
+  else:
+    # If they uploaded something else or skipped
+    raise Exception("No config.yaml uploaded, using default")
+except:
+  # Create the default config.yaml file using Python file operations
+  # This avoids the %%writefile magic issues
+  config_content = """data:
   train_path: ./dataset/train
   val_path: ./dataset/val
   input_format: image
   target_format: mesh
   resolution: 128
-  num_workers: 2  # Lower for Colab
+  num_workers: 2
 
 training:
-  batch_size: 2        # Adjust based on your Colab GPU
-  epochs: 50           # Reduced for Colab runtime constraints
+  batch_size: 2
+  epochs: 30
   learning_rate: 1e-4
-  save_interval: 5     # Save more frequently in Colab
-  log_interval: 10     # Log more frequently
+  save_interval: 5
+  log_interval: 10
 
 model:
   type: TSR
@@ -126,118 +149,70 @@ decoder:
 renderer_cls: tsr.models.renderers.volume.VolumeRenderer
 renderer:
   radius: 1.3
-  n_samples: 128
+  n_samples: 128"""
 
-# 4. Dataset preparation
-# Option 1: Upload dataset (if you have it prepared locally)
-from google.colab import files
+  with open('/content/TripoSR/config.yaml', 'w') as f:
+    f.write(config_content)
+  
+  print("Created default config.yaml")
 
-# Create a dataset upload helper
-def upload_dataset_files():
-    print("Please upload your dataset files (.zip recommended):")
-    uploaded = files.upload()
-    return list(uploaded.keys())[0]
+# Verify the config file
+!cat /content/TripoSR/config.yaml | head -n 10
+print("... (config file continues)")
 
-# Option for dataset upload
-import ipywidgets as widgets
-from IPython.display import display
+## Cell 6: Create Sample Dataset (for testing)
 
-dataset_option = widgets.RadioButtons(
-    options=['Upload zip dataset', 'Use sample data for testing'],
-    description='Dataset:',
-    disabled=False
-)
-display(dataset_option)
+# Create a minimal test dataset
+!mkdir -p /content/TripoSR/dataset/train/sample1
+!mkdir -p /content/TripoSR/dataset/val/sample2
 
-# Process dataset based on selection
-if dataset_option.value == 'Upload zip dataset':
-    zip_file = upload_dataset_files()
-    if zip_file.endswith('.zip'):
-        !unzip "{zip_file}" -d /content/dataset_extracted
-        
-        # Now run the data preparation script
-        !python prepare_data.py --input_dir /content/dataset_extracted --output_dir /content/TripoSR/dataset --val_split 0.2 --resize 128
-    else:
-        print("Please upload a zip file containing your dataset.")
-else:
-    # Create a minimal test dataset for demonstration
-    !mkdir -p /content/TripoSR/dataset/train/sample1
-    !mkdir -p /content/TripoSR/dataset/val/sample2
-    
-    # Download a sample image and model for testing
-    !wget -q https://raw.githubusercontent.com/VAST-AI-Research/TripoSR/main/assets/teapot.png -O /content/TripoSR/dataset/train/sample1/image.png
-    !wget -q https://raw.githubusercontent.com/VAST-AI-Research/TripoSR/main/assets/teapot.png -O /content/TripoSR/dataset/val/sample2/image.png
-    
-    # For the 3D models, we'll just create placeholder files since we don't have actual model files
-    !touch /content/TripoSR/dataset/train/sample1/model.obj
-    !touch /content/TripoSR/dataset/val/sample2/model.obj
-    
-    print("Created sample dataset for testing purposes only.")
-    print("⚠️ Note: This won't produce meaningful results - just for testing the workflow!")
+# Download sample images
+!wget -q https://raw.githubusercontent.com/VAST-AI-Research/TripoSR/main/assets/teapot.png -O /content/TripoSR/dataset/train/sample1/image.png
+!wget -q https://raw.githubusercontent.com/VAST-AI-Research/TripoSR/main/assets/teapot.png -O /content/TripoSR/dataset/val/sample2/image.png
 
-# 5. Test the dataset loading
-!python test_data.py --config config.yaml --output_dir dataset_test --num_samples 2
+# Create placeholder model files
+!touch /content/TripoSR/dataset/train/sample1/model.obj
+!touch /content/TripoSR/dataset/val/sample2/model.obj
 
-# 6. Fine-tune the model using the TrianC0de/TripoSR checkpoint
-# Make sure the train.py has been modified to use the TrianC0de/TripoSR model
+print("Sample dataset created (for testing workflow only)")
 
-# Checking if train.py uses the correct model source
+## Cell 7: Update Model Source to Use TrianC0de/TripoSR
+
+# Update train.py to use TrianC0de/TripoSR model
 import re
-
 with open('train.py', 'r') as f:
     train_content = f.read()
 
 if 'TrianC0de/TripoSR' not in train_content:
-    # Update the train.py file to use the TrianC0de/TripoSR model
     updated_content = re.sub(r'("stabilityai/TripoSR")', r'"TrianC0de/TripoSR"', train_content)
-    
     with open('train.py', 'w') as f:
         f.write(updated_content)
-    
     print("Updated train.py to use TrianC0de/TripoSR model")
 
-# Start the fine-tuning process with reduced epochs for Colab
+# Do the same for evaluate.py
+with open('evaluate.py', 'r') as f:
+    eval_content = f.read()
+
+if 'TrianC0de/TripoSR' not in eval_content:
+    updated_content = re.sub(r'("stabilityai/TripoSR")', r'"TrianC0de/TripoSR"', eval_content)
+    with open('evaluate.py', 'w') as f:
+        f.write(updated_content)
+    print("Updated evaluate.py to use TrianC0de/TripoSR model")
+
+## Cell 8: Run Training
+
+# Start fine-tuning with pretrained TrianC0de/TripoSR model
 !python train.py --config config.yaml --output_dir /content/TripoSR/output --device cuda:0 --pretrained
 
-# 7. Evaluate the fine-tuned model
-!python evaluate.py --config config.yaml --finetuned_model /content/TripoSR/output/model_final.pth --output_dir /content/TripoSR/evaluation --visualize --num_samples 5
+## Cell 9: Evaluate Model
 
-# 8. Visualize some results with the fine-tuned model
-# First upload some test images
-from google.colab import files
+# Evaluate the fine-tuned model
+!python evaluate.py --config config.yaml --finetuned_model /content/TripoSR/output/model_final.pth --output_dir /content/TripoSR/evaluation --visualize --num_samples 2
 
-def upload_test_images():
-    print("Please upload test images:")
-    uploaded = files.upload()
-    
-    # Save uploaded images to a directory
-    import os
-    test_dir = '/content/TripoSR/test_images'
-    os.makedirs(test_dir, exist_ok=True)
-    
-    for filename in uploaded.keys():
-        with open(os.path.join(test_dir, filename), 'wb') as f:
-            f.write(uploaded[filename])
-    
-    return test_dir
+## Cell 10: Save to Google Drive
 
-test_dir = upload_test_images()
-
-# Run visualization on the uploaded images
-!python visualize.py --model_path /content/TripoSR/output/model_final.pth --input_dir {test_dir} --output_dir /content/TripoSR/visualization
-
-# 9. Save the fine-tuned model to Google Drive
+# Save the trained model to Google Drive
 !cp /content/TripoSR/output/model_final.pth /content/drive/MyDrive/TripoSR_finetuned.pth
 !cp -r /content/TripoSR/evaluation /content/drive/MyDrive/TripoSR_evaluation
-!cp -r /content/TripoSR/visualization /content/drive/MyDrive/TripoSR_visualization
 
-print("Fine-tuned model and results saved to Google Drive")
-
-# 10. Download the results (optional)
-from google.colab import files
-
-# Zip the results for easy download
-!zip -r /content/TripoSR_results.zip /content/TripoSR/output /content/TripoSR/evaluation /content/TripoSR/visualization
-
-# Initiate download
-files.download('/content/TripoSR_results.zip')
+print("Fine-tuned model and evaluation results saved to Google Drive")
