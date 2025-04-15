@@ -1,0 +1,79 @@
+data:
+  train_path: ./dataset/train
+  val_path: ./dataset/val
+  input_format: image
+  target_format: mesh
+  resolution: 128
+  num_workers: 4  # Number of workers for data loading
+
+training:
+  batch_size: 2        # Start with 2-4 for initial testing
+  epochs: 100
+  learning_rate: 1e-4
+  save_interval: 10    # Save checkpoint every 10 epochs
+  log_interval: 50     # Log training progress every 50 iterations
+
+model:
+  type: TSR
+  transformer:
+    encoder_layers: 12
+    decoder_layers: 8
+    embed_dim: 768
+
+# Original TripoSR model configuration
+cond_image_size: 256
+
+image_tokenizer_cls: tsr.models.image_encoders.openai.OpenAIImageEncoder
+image_tokenizer:
+  embed_dim: 768
+  encoder_pretrained: stabilityai/sd-vae-ft-ema
+  encoder_config:
+    z_channels: 4
+    resolution: 256
+    in_channels: 3
+    out_ch: 3
+    ch: 128
+    ch_mult: [1, 2, 4, 4]
+    num_res_blocks: 2
+    attn_resolutions: [32]
+    dropout: 0.0
+
+tokenizer_cls: tsr.models.tokenizers.surface_plane.SurfacePlaneTokenizer
+tokenizer:
+  n_point_samples: 6144
+  sample_mode: grid
+  resolution: 32
+  padding: 0.1
+  embed_dim: 768
+  
+backbone_cls: tsr.models.transformer.Transformer
+backbone:
+  encoder:
+    embed_dim: 768
+    depth: 12
+    num_heads: 12
+    mlp_ratio: 4
+    qkv_bias: True
+  decoder:
+    embed_dim: 768
+    depth: 8
+    num_heads: 12
+    mlp_ratio: 4
+    qkv_bias: True
+
+post_processor_cls: tsr.models.post_processors.identity.Identity
+post_processor: {}
+
+decoder_cls: tsr.models.decoders.triplane.Triplane
+decoder:
+  dims_3d: [32, 32, 32]
+  dims_2d: [256, 256]
+  feat_dim: 32
+  mlp_dim: 128
+  out_dim: 4
+  n_blocks: 2
+  
+renderer_cls: tsr.models.renderers.volume.VolumeRenderer
+renderer:
+  radius: 1.3
+  n_samples: 128 
