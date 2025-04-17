@@ -67,21 +67,23 @@ try:
 except:
   # Create the default config.yaml file using Python file operations
   # This avoids the %%writefile magic issues
-  config_content = """data:
-  train_path: ./dataset/train
-  val_path: ./dataset/val
-  input_format: image
-  target_format: mesh
-  resolution: 128
-  num_workers: 2
+  config_content = """system:
+  data:
+    train_path: ./dataset/train
+    val_path: ./dataset/val
+    input_format: image
+    target_format: mesh
+    resolution: 128
+    num_workers: 2
 
-training:
-  batch_size: 2
-  epochs: 30
-  learning_rate: 1e-4
-  save_interval: 5
-  log_interval: 10
+  training:
+    batch_size: 2
+    epochs: 30
+    learning_rate: 1e-4
+    save_interval: 5
+    log_interval: 10
 
+# Original TripoSR model configuration (remains top-level)
 model:
   type: TSR
   transformer:
@@ -89,7 +91,6 @@ model:
     decoder_layers: 8
     embed_dim: 768
 
-# Original TripoSR model configuration
 cond_image_size: 256
 
 image_tokenizer_cls: tsr.models.image_encoders.openai.OpenAIImageEncoder
