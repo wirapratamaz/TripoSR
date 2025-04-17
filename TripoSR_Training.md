@@ -313,7 +313,7 @@ print("Functions implemented successfully!")
 # Start fine-tuning with pretrained TrianC0de/TripoSR model
 print("Starting training...")
 try:
-    !python train.py --config config.yaml --output_dir /content/TripoSR/output --device cuda:0 --pretrained
+    !python train.py --config config.yaml --output_dir /content/TripoSR/output --device cuda:0
     
     # Check if model was created
     if os.path.exists("/content/TripoSR/output/model_final.pth"):
