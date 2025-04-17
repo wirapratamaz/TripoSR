@@ -4,19 +4,20 @@
 
 # Mount Google Drive
 from google.colab import drive
-drive.mount('/content/drive')
+drive.mount('/content/drive', force_remount=True)
 
-# Clone the repository
-!git clone https://github.com/wirapratamaz/TripoSR.git
-%cd /content/TripoSR
+# Move to /content and create a clean workspace
+%cd /content
 
-# --- Add this line to remove potential conflicting file ---
+# Remove any old TripoSR folder and clone only the Training branch
+!rm -rf TripoSR
+!git clone -b Training --single-branch --depth 1 https://github.com/wirapratamaz/TripoSR.git
+
+# Enter the repo and remove old config if present
+%cd TripoSR
 !rm -f config.yaml
-# --- End of added line ---
 
-# Checkout the correct branch and pull latest changes
-!git checkout Training
-!git pull origin Training
+## Already cloned the Training branch; no further checkout or pull needed
 
 # --- Add this line to check file existence ---
 print("--- Checking for train.py after clone/checkout ---")
@@ -113,7 +114,7 @@ tokenizer:
   resolution: 32
   padding: 0.1
   embed_dim: 768
-
+  
 backbone_cls: tsr.models.transformer.Transformer
 backbone:
   encoder:
@@ -140,7 +141,7 @@ decoder:
   mlp_dim: 128
   out_dim: 4
   n_blocks: 2
-
+  
 renderer_cls: tsr.models.renderers.volume.VolumeRenderer
 renderer:
   radius: 1.3
@@ -148,7 +149,7 @@ renderer:
 
   with open('/content/TripoSR/config.yaml', 'w') as f:
     f.write(config_content)
-
+  
   print("Created default config.yaml")
 
 # Verify the config file
@@ -473,7 +474,7 @@ def evaluate():
     original_model = TSR.from_pretrained(
         "TrianC0de/TripoSR",
         config_name="config.yaml",
-        weight_name="model.ckpt"
+        weight_name="sdfusion-snet-all.pth"
     )
     original_model.to(device)
     
@@ -482,7 +483,7 @@ def evaluate():
     finetuned_model = TSR.from_pretrained(
         "TrianC0de/TripoSR",
         config_name="config.yaml",
-        weight_name="model.ckpt"
+        weight_name="sdfusion-snet-all.pth"
     )
     finetuned_model.load_state_dict(torch.load(args.finetuned_model))
     finetuned_model.to(device)
