@@ -262,7 +262,7 @@ def train():
         model = TSR.from_pretrained(
             "TrianC0de/TripoSR",
             config_name="config.yaml",
-            weight_name="model.ckpt"
+            weight_name="sdfusion-snet-all.pth"
         )
     else:
         # Initialize model from config
