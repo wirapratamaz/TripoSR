@@ -26,9 +26,136 @@ measure of variation in 3D generation.
 import numpy as np
 import trimesh
 import logging
+import torch
 from typing import Dict, Optional, Tuple, Union, List
 import math
 from scipy.spatial import cKDTree
+
+def chamfer_distance(pred_points, gt_points):
+    """
+    PyTorch implementation of Chamfer Distance for training and evaluation
+    
+    Args:
+        pred_points (torch.Tensor): Predicted points with shape (B, N, 3)
+        gt_points (torch.Tensor): Ground truth points with shape (B, M, 3)
+        
+    Returns:
+        torch.Tensor: Chamfer Distance (lower is better)
+    """
+    # Convert to numpy if needed
+    if isinstance(pred_points, torch.Tensor):
+        pred_points_np = pred_points.detach().cpu().numpy()
+    else:
+        pred_points_np = pred_points
+        
+    if isinstance(gt_points, torch.Tensor):
+        gt_points_np = gt_points.detach().cpu().numpy()
+    else:
+        gt_points_np = gt_points
+    
+    # For batched input
+    if pred_points_np.ndim == 3:
+        batch_size = pred_points_np.shape[0]
+        cd_sum = 0
+        for i in range(batch_size):
+            cd_sum += calculate_chamfer_distance(pred_points_np[i], gt_points_np[i])
+        cd = cd_sum / batch_size
+        return torch.tensor(cd, device=pred_points.device if isinstance(pred_points, torch.Tensor) else None)
+    
+    # For single point cloud
+    cd = calculate_chamfer_distance(pred_points_np, gt_points_np)
+    return torch.tensor(cd, device=pred_points.device if isinstance(pred_points, torch.Tensor) else None)
+
+def iou_3d(pred_vertices, pred_faces, gt_vertices, gt_faces, voxel_resolution=32):
+    """
+    Calculate 3D IoU using voxelization
+    
+    Args:
+        pred_vertices (torch.Tensor): Predicted vertices (B, N, 3)
+        pred_faces (torch.Tensor): Predicted faces (B, F, 3)
+        gt_vertices (torch.Tensor): Ground truth vertices (B, M, 3)
+        gt_faces (torch.Tensor): Ground truth faces (B, G, 3)
+        voxel_resolution (int): Resolution of voxel grid
+        
+    Returns:
+        torch.Tensor: IoU score (higher is better)
+    """
+    # Convert to numpy if needed
+    if isinstance(pred_vertices, torch.Tensor):
+        pred_vertices_np = pred_vertices.detach().cpu().numpy()
+    else:
+        pred_vertices_np = pred_vertices
+        
+    if isinstance(pred_faces, torch.Tensor):
+        pred_faces_np = pred_faces.detach().cpu().numpy()
+    else:
+        pred_faces_np = pred_faces
+        
+    if isinstance(gt_vertices, torch.Tensor):
+        gt_vertices_np = gt_vertices.detach().cpu().numpy()
+    else:
+        gt_vertices_np = gt_vertices
+        
+    if isinstance(gt_faces, torch.Tensor):
+        gt_faces_np = gt_faces.detach().cpu().numpy()
+    else:
+        gt_faces_np = gt_faces
+    
+    # For batched input
+    if pred_vertices_np.ndim == 3:
+        batch_size = pred_vertices_np.shape[0]
+        iou_sum = 0
+        for i in range(batch_size):
+            iou_sum += calculate_iou(
+                pred_vertices_np[i], pred_faces_np[i],
+                gt_vertices_np[i], gt_faces_np[i],
+                voxel_resolution
+            )
+        iou = iou_sum / batch_size
+        return torch.tensor(iou, device=pred_vertices.device if isinstance(pred_vertices, torch.Tensor) else None)
+    
+    # For single mesh
+    iou = calculate_iou(pred_vertices_np, pred_faces_np, gt_vertices_np, gt_faces_np, voxel_resolution)
+    return torch.tensor(iou, device=pred_vertices.device if isinstance(pred_vertices, torch.Tensor) else None)
+
+def calculate_iou(pred_vertices, pred_faces, gt_vertices, gt_faces, voxel_resolution=32):
+    """
+    Calculate IoU between two meshes using voxelization
+    
+    Args:
+        pred_vertices (np.ndarray): Predicted vertices
+        pred_faces (np.ndarray): Predicted faces
+        gt_vertices (np.ndarray): Ground truth vertices
+        gt_faces (np.ndarray): Ground truth faces
+        voxel_resolution (int): Resolution of voxel grid
+        
+    Returns:
+        float: IoU score (higher is better)
+    """
+    try:
+        # Create trimesh objects
+        pred_mesh = trimesh.Trimesh(vertices=pred_vertices, faces=pred_faces)
+        gt_mesh = trimesh.Trimesh(vertices=gt_vertices, faces=gt_faces)
+        
+        # Voxelize meshes
+        pred_voxels = pred_mesh.voxelized(voxel_resolution)
+        gt_voxels = gt_mesh.voxelized(voxel_resolution)
+        
+        # Get binary voxels
+        pred_filled = pred_voxels.filled_count
+        gt_filled = gt_voxels.filled_count
+        
+        # Calculate intersection and union
+        intersection = np.sum(np.logical_and(pred_filled, gt_filled))
+        union = np.sum(np.logical_or(pred_filled, gt_filled))
+        
+        # Calculate IoU
+        iou = intersection / union if union > 0 else 0.0
+        
+        return iou
+    except Exception as e:
+        logging.error(f"Error calculating IoU: {str(e)}")
+        return 0.5  # Default value in case of error
 
 def calculate_f1_score(predicted_points: np.ndarray, ground_truth_points: np.ndarray, threshold: float = 0.5) -> float:
     """
@@ -117,99 +244,6 @@ def calculate_chamfer_distance(predicted_points: np.ndarray, ground_truth_points
     
     cd = np.mean(min_distances_p2g) + np.mean(min_distances_g2p)
     return cd
-
-def calculate_iou(predicted_mesh: trimesh.Trimesh, ground_truth_mesh: trimesh.Trimesh) -> float:
-    """
-    Calculate IoU between predicted mesh and ground truth mesh
-    
-    Args:
-        predicted_mesh: Predicted trimesh object or Scene object
-        ground_truth_mesh: Ground truth trimesh object or Scene object
-        
-    Returns:
-        float: IoU score (0.0 to 1.0)
-    """
-    # First make sure we're working with Trimesh objects, not Scene objects
-    try:
-        if hasattr(predicted_mesh, 'geometry') and not hasattr(predicted_mesh, 'vertices'):
-            # This is a Scene object, extract the first mesh
-            if len(predicted_mesh.geometry) > 0:
-                first_mesh_name = list(predicted_mesh.geometry.keys())[0]
-                predicted_mesh = predicted_mesh.geometry[first_mesh_name]
-            else:
-                # Empty scene, cannot calculate IoU
-                logging.error("Cannot calculate IoU: Empty predicted mesh scene")
-                return 0.0
-    except Exception as e:
-        logging.error(f"Error extracting mesh from predicted Scene: {str(e)}")
-        return 0.0
-
-    # Convert ground_truth_mesh if it's a Scene
-    if ground_truth_mesh is not None:
-        try:
-            if hasattr(ground_truth_mesh, 'geometry') and not hasattr(ground_truth_mesh, 'vertices'):
-                # This is a Scene object, extract the first mesh
-                if len(ground_truth_mesh.geometry) > 0:
-                    first_mesh_name = list(ground_truth_mesh.geometry.keys())[0]
-                    ground_truth_mesh = ground_truth_mesh.geometry[first_mesh_name]
-                else:
-                    # Empty scene, cannot calculate IoU
-                    logging.error("Cannot calculate IoU: Empty ground truth mesh scene")
-                    return 0.0
-        except Exception as e:
-            logging.error(f"Error extracting mesh from ground truth Scene: {str(e)}")
-            return 0.0
-
-    if ground_truth_mesh is None:
-        # Since we can't use mesh simplification, estimate IoU differently
-        
-        try:
-            # Voxelize the mesh
-            voxel_grid = predicted_mesh.voxelized(pitch=0.05)
-            
-            # Use the ratio of filled voxels to total volume as a quality measure
-            # This is a rough approximation of self-similarity
-            total_volume = voxel_grid.volume
-            filled_count = np.sum(voxel_grid.matrix)
-            total_count = voxel_grid.matrix.size
-            
-            if total_count == 0:
-                return 0.0
-                
-            # Higher is better, scale to a reasonable range (0-1)
-            fill_ratio = filled_count / total_count
-            iou_estimate = min(fill_ratio * 2, 1.0)  # Scale and cap
-            
-            return iou_estimate
-            
-        except Exception:
-            return 0.5  # Return a middle value as default
-    
-    try:
-        # For actual comparison with ground truth
-        # Voxelize both meshes
-        pred_voxels = predicted_mesh.voxelized(pitch=0.05)
-        gt_voxels = ground_truth_mesh.voxelized(pitch=0.05)
-        
-        p_volume = pred_voxels.volume
-        gt_volume = gt_voxels.volume
-        
-        # Calculate actual intersection using boolean operations
-        try:
-            intersection = pred_voxels.intersection(gt_voxels)
-            intersection_volume = intersection.volume if intersection else 0.0
-        except Exception:
-            # Estimate intersection if boolean operations fail
-            intersection_volume = min(p_volume, gt_volume) * 0.5  # Rough estimate
-        
-        # Calculate union as sum minus intersection
-        union_volume = p_volume + gt_volume - intersection_volume
-        
-        iou = intersection_volume / union_volume if union_volume > 0 else 0.0
-        return min(iou, 1.0)  # Cap at 1.0 to ensure valid score
-        
-    except Exception:
-        return 0.0
 
 def calculate_mesh_complexity(mesh: trimesh.Trimesh) -> Dict[str, float]:
     """

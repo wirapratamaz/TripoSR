@@ -1,3 +1,4 @@
+import os
 import importlib
 import math
 from collections import defaultdict
@@ -27,6 +28,19 @@ def find_class(cls_string):
     module = importlib.import_module(module_string, package=None)
     cls = getattr(module, cls_name)
     return cls
+
+
+def load_config(config_path):
+    """
+    Load configuration from a YAML file
+    
+    Args:
+        config_path (str): Path to config file
+        
+    Returns:
+        OmegaConf: Configuration object
+    """
+    return OmegaConf.load(config_path)
 
 
 def get_intrinsic_from_fov(fov, H, W, bs=-1):
