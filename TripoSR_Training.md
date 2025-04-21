@@ -67,8 +67,7 @@ try:
 except:
   # Create the default config.yaml file using Python file operations
   # This avoids the %%writefile magic issues
-  config_content = """system:
-  data:
+  config_content = """data:
     train_path: ./dataset/train
     val_path: ./dataset/val
     input_format: image
@@ -76,14 +75,14 @@ except:
     resolution: 128
     num_workers: 2
 
-  training:
+training:
     batch_size: 2
     epochs: 30
     learning_rate: 1e-4
     save_interval: 5
     log_interval: 10
 
-# Original TripoSR model configuration (remains top-level)
+# Original TripoSR model configuration
 model:
   type: TSR
   transformer:
