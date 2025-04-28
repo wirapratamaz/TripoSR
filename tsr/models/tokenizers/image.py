@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+import logging
 
 import torch
 import torch.nn as nn
@@ -8,6 +9,8 @@ from transformers.models.vit.modeling_vit import ViTModel
 
 from ...utils import BaseModule
 
+# Set up logging
+logger = logging.getLogger(__name__)
 
 class DINOSingleImageTokenizer(BaseModule):
     @dataclass
