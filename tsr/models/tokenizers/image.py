@@ -18,13 +18,18 @@ class DINOSingleImageTokenizer(BaseModule):
     cfg: Config
 
     def configure(self) -> None:
-        self.model: ViTModel = ViTModel(
-            ViTModel.config_class.from_pretrained(
-                hf_hub_download(
-                    repo_id=self.cfg.pretrained_model_name_or_path,
-                    filename="config.json",
-                )
+        # Determine the correct repo ID for the tokenizer/encoder model
+        # Use the one specified in its own config section, default to class default if missing.
+        tokenizer_repo_id = getattr(self.cfg, 'pretrained_model_name_or_path', "facebook/dino-vitb16") 
+        logger.info(f"Image Tokenizer attempting to load config from: {tokenizer_repo_id}") # Added logging
+        
+        config_path = hf_hub_download(
+                repo_id=tokenizer_repo_id, # Use the specific tokenizer repo_id
+                filename="config.json",
             )
+        
+        self.model: ViTModel = ViTModel(
+            ViTModel.config_class.from_pretrained(config_path)
         )
 
         if self.cfg.enable_gradient_checkpointing:

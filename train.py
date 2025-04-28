@@ -266,7 +266,15 @@ def train():
         )
     else:
         # Initialize model from config
-        model = TSR(config)
+        # Pass only the model-specific config section
+        if hasattr(config, 'model'):
+             model = TSR(config.model)
+        else:
+             # Fallback or error if 'model' section is missing
+             logger.error("Configuration file is missing the 'model' section!")
+             # Depending on desired behavior, you might raise an exception or exit
+             raise ValueError("Missing 'model' section in configuration.")
+             # model = TSR(config) # Original line, kept for reference
     
     model.to(device)
     
