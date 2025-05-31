@@ -1,0 +1,77 @@
+# OpenLRM Training Configuration for TripoSR
+
+experiment:
+  parent: "triposr"  # Parent experiment name
+  child: "openlrm-mix-base"  # Specific experiment name
+  seed: 42
+
+# Model configuration
+model:
+  tokenizer:
+    dim: 768
+    hidden_dim: 1536
+    heads: 12
+    num_tokens: 512
+    token_dropout: 0.1
+    
+  backbone:
+    dim: 768
+    depth: 12
+    heads: 12
+    mlp_ratio: 4
+    dropout: 0.1
+    attention_dropout: 0.1
+
+# Training configuration
+train:
+  batch_size: 8
+  epochs: 100
+  accum_steps: 1
+  lr: 1.0e-4
+  min_lr: 1.0e-5
+  beta1: 0.9
+  beta2: 0.999
+  weight_decay: 0.01
+  eps: 1.0e-8
+  grad_clip: 1.0
+  mixed_precision: "fp16"
+  find_unused_parameters: false
+  debug_global_steps: null  # Set to a number for debugging with fewer steps
+  
+  loss:
+    perceptual_weight: 0.1
+
+# Validation configuration
+val:
+  batch_size: 4
+  eval_global_steps: 500  # Evaluate every N global steps
+
+# Data configuration
+data:
+  dataset_path: "/Users/wirapratama/Desktop/TripoSR/dataset"
+  num_workers: 4
+  
+# Logger configuration
+logger:
+  log_root: "./logs"
+  tracker_root: "./runs"
+  trackers: ["tensorboard", "wandb"]
+  stream_level: "INFO"
+  log_level: "DEBUG"
+
+# Saver configuration
+saver:
+  checkpoint_root: "./checkpoints"
+  model_root: "./models"
+  checkpoint_global_steps: 1000  # Save checkpoint every N global steps
+  checkpoint_keep_level: 3  # Keep every 3rd checkpoint
+  auto_resume: true
+  load_model: null  # Path to model to load
+
+# Compiler configuration
+compile:
+  backend: "inductor"
+  mode: "max-autotune"
+  fullgraph: false
+  dynamic: false
+  enable: false
