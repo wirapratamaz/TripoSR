@@ -8,7 +8,24 @@ import torch
 from omegaconf import OmegaConf
 
 from openlrm.utils.logging import configure_logger, get_logger
-from trainers.openlrm_trainer import TripoSRTrainer
+# Add directory to path to ensure imports work in Colab
+import sys
+import os
+
+# Add the current directory to the path
+current_dir = os.path.dirname(os.path.abspath(__file__))
+if current_dir not in sys.path:
+    sys.path.append(current_dir)
+
+# Now try to import
+try:
+    from trainers.openlrm_trainer import TripoSRTrainer
+except ImportError:
+    # Fallback to absolute path
+    trainer_path = os.path.join(current_dir, "trainers")
+    if trainer_path not in sys.path:
+        sys.path.append(trainer_path)
+    from openlrm_trainer import TripoSRTrainer
 from utils.utils import setup_experiment_directories, convert_to_ckpt
 
 

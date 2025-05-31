@@ -184,7 +184,9 @@ class Trainer(Runner):
     def register_hooks(self):
         pass
 
-    def auto_resume_(self, cfg) -> bool:
+    def auto_resume_(self, cfg):
+        if not cfg.saver.auto_resume:
+            return False
         ckpt_root = os.path.join(
             cfg.saver.checkpoint_root,
             cfg.experiment.parent, cfg.experiment.child,
@@ -198,10 +200,44 @@ class Trainer(Runner):
         latest_ckpt = ckpt_dirs[-1]
         latest_ckpt_dir = os.path.join(ckpt_root, latest_ckpt)
         logger.info(f"======== Auto-resume from {latest_ckpt_dir} ========")
-        self.accelerator.load_state(latest_ckpt_dir)
-        self.global_step = int(latest_ckpt)
-        self.current_epoch = self.global_step // self.N_global_steps_per_epoch
-        return True
+        
+        try:
+            # Try to load the state with error handling
+            try:
+                self.accelerator.load_state(latest_ckpt_dir)
+            except KeyError as e:
+                if 'step' in str(e):
+                    # Handle missing 'step' key in the saved state
+                    logger.warning(f"KeyError: {e}. The checkpoint doesn't contain 'step' key.")
+                    logger.warning("Loading checkpoint partially and continuing.")
+                    # Instead of auto-resume, try loading just the model weights
+                    model_paths = [f for f in os.listdir(latest_ckpt_dir) if f.endswith('.safetensors') or f.endswith('.bin')]
+                    if model_paths:
+                        model_path = os.path.join(latest_ckpt_dir, model_paths[0])
+                        logger.info(f"Loading only model weights from {model_path}")
+                        try:
+                            safetensors.torch.load_model(
+                                self.accelerator.unwrap_model(self.model),
+                                model_path,
+                                strict=False,
+                            )
+                        except Exception as e2:
+                            logger.error(f"Failed to load model weights: {e2}")
+                            # Continue without resuming
+                            return False
+                else:
+                    # Some other KeyError, re-raise
+                    raise
+            
+            # Successfully loaded or worked around the issue
+            self.global_step = int(latest_ckpt)
+            self.current_epoch = self.global_step // self.N_global_steps_per_epoch
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error during auto-resume: {e}")
+            logger.warning("Continuing without resume.")
+            return False
 
     def load_model_(self, cfg):
         logger.info(f"======== Loading model from {cfg.saver.load_model} ========")
@@ -236,23 +272,36 @@ class Trainer(Runner):
         self.accelerator.save_state(output_dir=ckpt_dir, safe_serialization=True)
         logger.info(f"======== Saved checkpoint at global step {self.global_step} ========")
         # manage stratified checkpoints
-        ckpt_dirs = os.listdir(os.path.dirname(ckpt_dir))
-        ckpt_dirs.sort()
-        max_ckpt = int(ckpt_dirs[-1])
-        ckpt_base = int(self.cfg.saver.checkpoint_keep_level)
-        ckpt_period = self.cfg.saver.checkpoint_global_steps
-        logger.debug(f"Checkpoint base: {ckpt_base}")
-        logger.debug(f"Checkpoint period: {ckpt_period}")
-        cur_order = ckpt_base ** math.floor(math.log(max_ckpt // ckpt_period, ckpt_base))
-        cur_idx = 0
-        while cur_order > 0:
-            cur_digit = max_ckpt // ckpt_period // cur_order % ckpt_base
-            while cur_idx < len(ckpt_dirs) and int(ckpt_dirs[cur_idx]) // ckpt_period // cur_order % ckpt_base < cur_digit:
-                if int(ckpt_dirs[cur_idx]) // ckpt_period % cur_order != 0:
-                    shutil.rmtree(os.path.join(os.path.dirname(ckpt_dir), ckpt_dirs[cur_idx]))
-                    logger.info(f"Removed checkpoint {ckpt_dirs[cur_idx]}")
-                cur_idx += 1
-            cur_order //= ckpt_base
+        try:
+            ckpt_dirs = os.listdir(os.path.dirname(ckpt_dir))
+            ckpt_dirs.sort()
+            max_ckpt = int(ckpt_dirs[-1])
+            ckpt_base = int(self.cfg.saver.checkpoint_keep_level)
+            ckpt_period = self.cfg.saver.checkpoint_global_steps
+            logger.debug(f"Checkpoint base: {ckpt_base}")
+            logger.debug(f"Checkpoint period: {ckpt_period}")
+            
+            # Add safety check to prevent math domain error
+            log_arg = max_ckpt // ckpt_period
+            if log_arg < 1:
+                logger.warning(f"Skipping checkpoint cleanup - not enough checkpoints yet (log_arg={log_arg})")
+                return
+                
+            cur_order = ckpt_base ** math.floor(math.log(log_arg, ckpt_base))
+            cur_idx = 0
+            while cur_order > 0:
+                cur_digit = max_ckpt // ckpt_period // cur_order % ckpt_base
+                while cur_idx < len(ckpt_dirs) and int(ckpt_dirs[cur_idx]) // ckpt_period // cur_order % ckpt_base < cur_digit:
+                    if int(ckpt_dirs[cur_idx]) // ckpt_period % cur_order != 0:
+                        shutil.rmtree(os.path.join(os.path.dirname(ckpt_dir), ckpt_dirs[cur_idx]))
+                        logger.info(f"Removed checkpoint {ckpt_dirs[cur_idx]}")
+                    cur_idx += 1
+                cur_order //= ckpt_base
+        except Exception as e:
+            # Catch any errors in checkpoint management to prevent training from crashing
+            logger.error(f"Error during checkpoint management: {str(e)}")
+            logger.error("Continuing training despite checkpoint management error.")
+            # Don't re-raise the exception - let training continue
 
     @property
     def global_step_in_epoch(self):

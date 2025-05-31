@@ -12,8 +12,23 @@ import safetensors.torch
 from openlrm.runners.train.base_trainer import Trainer
 from openlrm.utils.logging import get_logger
 
-from ..models.model import build_model
-from ..data.dataset import build_dataloader
+# Try both absolute and relative import paths to be compatible with different environments
+try:
+    # Try relative imports first (when running within the package)
+    from ..models.model import build_model
+    from ..data.dataset import build_dataloader
+except ImportError:
+    try:
+        # Try absolute imports as fallback
+        from openlrm_integration.models.model import build_model
+        from openlrm_integration.data.dataset import build_dataloader
+    except ImportError:
+        # Last resort: direct imports assuming current directory structure
+        import sys
+        import os
+        sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        from models.model import build_model
+        from data.dataset import build_dataloader
 
 logger = get_logger(__name__)
 
