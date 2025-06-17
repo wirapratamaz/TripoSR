@@ -1,88 +1,144 @@
-# TripoSR Fine-Tuning Colab Notebook
+# TripoSR Fine-Tuning Training Guide for Google Colab
 
-## Cell 1: Setup and Dependencies
+---
 
-# Mount Google Drive
+## 📋 Prerequisites
+- Google Colab account with GPU runtime enabled
+- Basic understanding of machine learning concepts
+- Training dataset prepared (images + 3D models)
+
+---
+
+## 🔧 Cell 1: Environment Setup and Repository Clone
+
+**Purpose**: Mount Google Drive, clone the TripoSR repository, and set up the workspace.
+
+```python
+# Mount Google Drive for data access
 from google.colab import drive
 drive.mount('/content/drive', force_remount=True)
 
-# Move to /content and create a clean workspace
+# Navigate to content directory and clean workspace
 %cd /content
 
-# Remove any old TripoSR folder and clone only the Training branch
+# Remove any existing TripoSR folder and clone fresh
 !rm -rf TripoSR
-!git clone -b Training --single-branch --depth 1 https://github.com/wirapratamaz/TripoSR.git
+!git clone -b openlrm-training --single-branch --depth 1 https://github.com/wirapratamaz/TripoSR.git
 
-# Enter the repo and remove old config if present
+# Enter the repository directory
 %cd TripoSR
+
+# Clean up any existing config files
 !rm -f config.yaml
 
-## Already cloned the Training branch; no further checkout or pull needed
-
-# --- Add this line to check file existence ---
-print("--- Checking for train.py after clone/checkout ---")
+# Verify repository structure
+print("=== Repository Structure Check ===")
+!ls -la
+print("\n=== Checking for train.py ===")
 !ls -l train.py
-print("-----------------------------------------------")
-# --- End of added line ---
+print("================================")
+```
 
-# Install dependencies
+---
+
+## 📦 Cell 2: Install Dependencies
+
+**Purpose**: Install all required Python packages for TripoSR training.
+
+```python
+# Install core dependencies
+print("Installing core ML packages...")
 !pip install -q trimesh omegaconf einops rembg huggingface-hub transformers==4.35.0 onnxruntime
+
+print("Installing 3D processing packages...")
 !pip install -q git+https://github.com/tatsy/torchmcubes.git
 !pip install -q xatlas==0.0.9 imageio[ffmpeg] matplotlib pandas tqdm
+
+print("Installing additional dependencies...")
 !pip install -q moderngl scipy>=1.11.0
+
+# Install project-specific requirements
+print("Installing project requirements...")
 !pip install -r requirements.txt
 
-# Check CUDA
+# Verify CUDA setup
 import torch
+print("\n=== GPU Setup Verification ===")
 print(f"CUDA available: {torch.cuda.is_available()}")
 if torch.cuda.is_available():
     print(f"CUDA device: {torch.cuda.get_device_name(0)}")
+    print(f"CUDA version: {torch.version.cuda}")
+    print(f"GPU memory: {torch.cuda.get_device_properties(0).total_memory / 1e9:.1f} GB")
+else:
+    print("⚠️ WARNING: CUDA not available. Training will be very slow on CPU.")
+print("================================")
+```
 
-## Cell 2: Create Directories
+---
 
-# Create directories
+## 📁 Cell 3: Create Directory Structure
+
+**Purpose**: Set up the required directory structure for training data and outputs.
+
+```python
+# Create training and validation data directories
+print("Creating dataset directories...")
 !mkdir -p /content/TripoSR/dataset/train
 !mkdir -p /content/TripoSR/dataset/val
+
+# Create output directories for models and logs
+print("Creating output directories...")
 !mkdir -p /content/TripoSR/output
 !mkdir -p /content/TripoSR/evaluation
+!mkdir -p /content/TripoSR/logs
 
-## Cell 3: Upload Config File
+# Verify directory structure
+print("\n=== Directory Structure ===")
+!tree /content/TripoSR -d -L 3 2>/dev/null || find /content/TripoSR -type d | head -20
+print("==========================")
+```
 
-# Upload config.yaml rather than trying to create it inline
+---
+
+## ⚙️ Cell 4: Configuration Setup
+
+**Purpose**: Create or upload the training configuration file.
+
+```python
 from google.colab import files
-import io
 import os
 
-# Either upload a config file or use the default one
-print("You can upload your own config.yaml or use the default one")
-print("To use the default, just click 'Skip' below")
+# Option 1: Upload your own config.yaml
+print("🔧 Configuration Setup")
+print("Choose one of the following options:")
+print("1. Upload your own config.yaml file")
+print("2. Use the default configuration (recommended for beginners)")
+print("\nTo upload: Run the upload cell below")
+print("To use default: Skip the upload and continue")
 
-try:
-  uploaded = files.upload()  # This will prompt for file upload
-  if 'config.yaml' in uploaded:
-    print("Using uploaded config.yaml")
-  else:
-    # If they uploaded something else or skipped
-    raise Exception("No config.yaml uploaded, using default")
-except:
-  # Create the default config.yaml file using Python file operations
-  # This avoids the %%writefile magic issues
-  config_content = """data:
-    train_path: ./dataset/train
-    val_path: ./dataset/val
-    input_format: image
-    target_format: mesh
-    resolution: 128
-    num_workers: 2
+# Uncomment the next line if you want to upload your own config
+# uploaded = files.upload()
+
+# Create default configuration
+config_content = """# TripoSR Training Configuration
+# Adjust these parameters based on your dataset and hardware
+
+data:
+  train_path: ./dataset/train
+  val_path: ./dataset/val
+  input_format: image
+  target_format: mesh
+  resolution: 128
+  num_workers: 2
 
 training:
-    batch_size: 2
-    epochs: 30
-    learning_rate: 1e-4
-    save_interval: 5
-    log_interval: 10
+  batch_size: 2          # Reduce if you get OOM errors
+  epochs: 30             # Increase for better results
+  learning_rate: 1e-4    # Learning rate for optimization
+  save_interval: 5       # Save model every N epochs
+  log_interval: 10       # Log progress every N steps
 
-# Original TripoSR model configuration
+# Model Architecture (TripoSR configuration)
 model:
   type: TSR
   transformer:
@@ -92,6 +148,7 @@ model:
 
 cond_image_size: 256
 
+# Image Encoder Configuration
 image_tokenizer_cls: tsr.models.image_encoders.openai.OpenAIImageEncoder
 image_tokenizer:
   embed_dim: 768
@@ -107,6 +164,7 @@ image_tokenizer:
     attn_resolutions: [32]
     dropout: 0.0
 
+# Surface Tokenizer Configuration
 tokenizer_cls: tsr.models.tokenizers.surface_plane.SurfacePlaneTokenizer
 tokenizer:
   n_point_samples: 6144
@@ -114,7 +172,8 @@ tokenizer:
   resolution: 32
   padding: 0.1
   embed_dim: 768
-  
+
+# Transformer Backbone
 backbone_cls: tsr.models.transformer.Transformer
 backbone:
   encoder:
@@ -130,9 +189,11 @@ backbone:
     mlp_ratio: 4
     qkv_bias: True
 
+# Post Processor
 post_processor_cls: tsr.models.post_processors.identity.Identity
 post_processor: {}
 
+# Decoder Configuration
 decoder_cls: tsr.models.decoders.triplane.Triplane
 decoder:
   dims_3d: [32, 32, 32]
@@ -141,64 +202,146 @@ decoder:
   mlp_dim: 128
   out_dim: 4
   n_blocks: 2
-  
+
+# Volume Renderer
 renderer_cls: tsr.models.renderers.volume.VolumeRenderer
 renderer:
   radius: 1.3
   n_samples: 128"""
 
-  with open('/content/TripoSR/config.yaml', 'w') as f:
+# Write configuration to file
+with open('/content/TripoSR/config.yaml', 'w') as f:
     f.write(config_content)
-  
-  print("Created default config.yaml")
 
-# Verify the config file
-!cat /content/TripoSR/config.yaml | head -n 10
-print("... (config file continues)")
+print("✅ Configuration file created successfully!")
 
-## Cell 6: Create Sample Dataset (for testing)
+# Display first few lines of config
+print("\n=== Configuration Preview ===")
+!head -n 15 /content/TripoSR/config.yaml
+print("... (configuration continues)")
+print("=============================")
+```
 
-# Create a minimal test dataset
-!mkdir -p /content/TripoSR/dataset/train/sample1
-!mkdir -p /content/TripoSR/dataset/val/sample2
+---
 
-# Download sample images
-!wget -q https://raw.githubusercontent.com/VAST-AI-Research/TripoSR/main/assets/teapot.png -O /content/TripoSR/dataset/train/sample1/image.png
-!wget -q https://raw.githubusercontent.com/VAST-AI-Research/TripoSR/main/assets/teapot.png -O /content/TripoSR/dataset/val/sample2/image.png
+## 📊 Cell 5: Dataset Preparation
 
-# Create placeholder model files
-!touch /content/TripoSR/dataset/train/sample1/model.obj
-!touch /content/TripoSR/dataset/val/sample2/model.obj
+**Purpose**: Set up your training dataset. Choose between uploading your own data or using sample data for testing.
 
-print("Sample dataset created (for testing workflow only)")
+```python
+import os
+from google.colab import files
 
-## Cell 7: Update Model Source to Use TrianC0de/TripoSR
+print("📊 Dataset Setup")
+print("Choose your dataset option:")
+print("\nOption A: Upload your own dataset")
+print("- Prepare your data in the following structure:")
+print("  dataset/train/sample_name/image.png (or .jpg)")
+print("  dataset/train/sample_name/model.obj (3D model)")
+print("  dataset/val/sample_name/image.png")
+print("  dataset/val/sample_name/model.obj")
+print("\nOption B: Use sample dataset for testing")
 
-# Update train.py to use TrianC0de/TripoSR model
+# Option B: Create sample dataset for testing
+use_sample_data = True  # Set to False if you want to upload your own data
+
+if use_sample_data:
+    print("\n🔄 Creating sample dataset for testing...")
+    
+    # Create sample directories
+    !mkdir -p /content/TripoSR/dataset/train/sample1
+    !mkdir -p /content/TripoSR/dataset/train/sample2
+    !mkdir -p /content/TripoSR/dataset/val/sample1
+    !mkdir -p /content/TripoSR/dataset/val/sample2
+    
+    # Download sample images
+    print("Downloading sample images...")
+    !wget -q https://raw.githubusercontent.com/VAST-AI-Research/TripoSR/main/assets/teapot.png -O /content/TripoSR/dataset/train/sample1/image.png
+    !wget -q https://raw.githubusercontent.com/VAST-AI-Research/TripoSR/main/assets/teapot.png -O /content/TripoSR/dataset/train/sample2/image.png
+    !wget -q https://raw.githubusercontent.com/VAST-AI-Research/TripoSR/main/assets/teapot.png -O /content/TripoSR/dataset/val/sample1/image.png
+    !wget -q https://raw.githubusercontent.com/VAST-AI-Research/TripoSR/main/assets/teapot.png -O /content/TripoSR/dataset/val/sample2/image.png
+    
+    # Create placeholder 3D model files
+    print("Creating placeholder 3D models...")
+    !touch /content/TripoSR/dataset/train/sample1/model.obj
+    !touch /content/TripoSR/dataset/train/sample2/model.obj
+    !touch /content/TripoSR/dataset/val/sample1/model.obj
+    !touch /content/TripoSR/dataset/val/sample2/model.obj
+    
+    print("✅ Sample dataset created successfully!")
+    print("⚠️ Note: This is for testing the training pipeline only.")
+    print("   For real training, replace with your actual dataset.")
+else:
+    print("\n📁 Please upload your dataset files using the file browser or:")
+    print("1. Mount your Google Drive containing the dataset")
+    print("2. Copy your dataset to /content/TripoSR/dataset/")
+    print("3. Ensure proper directory structure as shown above")
+
+# Verify dataset structure
+print("\n=== Dataset Structure Verification ===")
+!find /content/TripoSR/dataset -type f | head -10
+print("=====================================")
+```
+
+---
+
+## 🔄 Cell 6: Model Configuration Update
+
+**Purpose**: Update the training scripts to use the correct model source.
+
+```python
 import re
-with open('train.py', 'r') as f:
-    train_content = f.read()
+import os
 
-if 'TrianC0de/TripoSR' not in train_content:
-    updated_content = re.sub(r'("stabilityai/TripoSR")', r'"TrianC0de/TripoSR"', train_content)
-    with open('train.py', 'w') as f:
-        f.write(updated_content)
-    print("Updated train.py to use TrianC0de/TripoSR model")
+print("🔄 Updating model configuration...")
 
-# Do the same for evaluate.py
-with open('evaluate.py', 'r') as f:
-    eval_content = f.read()
+# Update train.py to use the correct model source
+if os.path.exists('train.py'):
+    with open('train.py', 'r') as f:
+        train_content = f.read()
+    
+    # Update model source if needed
+    if 'TrianC0de/TripoSR' not in train_content:
+        updated_content = re.sub(r'("stabilityai/TripoSR")', r'"TrianC0de/TripoSR"', train_content)
+        with open('train.py', 'w') as f:
+            f.write(updated_content)
+        print("✅ Updated train.py to use TrianC0de/TripoSR model")
+    else:
+        print("✅ train.py already configured correctly")
+else:
+    print("⚠️ train.py not found")
 
-if 'TrianC0de/TripoSR' not in eval_content:
-    updated_content = re.sub(r'("stabilityai/TripoSR")', r'"TrianC0de/TripoSR"', eval_content)
-    with open('evaluate.py', 'w') as f:
-        f.write(updated_content)
-    print("Updated evaluate.py to use TrianC0de/TripoSR model")
+# Update evaluate.py similarly
+if os.path.exists('evaluate.py'):
+    with open('evaluate.py', 'r') as f:
+        eval_content = f.read()
+    
+    if 'TrianC0de/TripoSR' not in eval_content:
+        updated_content = re.sub(r'("stabilityai/TripoSR")', r'"TrianC0de/TripoSR"', eval_content)
+        with open('evaluate.py', 'w') as f:
+            f.write(updated_content)
+        print("✅ Updated evaluate.py to use TrianC0de/TripoSR model")
+    else:
+        print("✅ evaluate.py already configured correctly")
+else:
+    print("⚠️ evaluate.py not found")
 
-## Cell 7b: Create Custom Implementation of Missing Functions
+print("\n🔍 Verifying script configuration...")
+!grep -n "TrianC0de/TripoSR" train.py evaluate.py 2>/dev/null || echo "Configuration check complete"
+```
 
-# Create implementations for missing functions
-print("Creating implementation for missing functions...")
+---
+
+## 🛠️ Cell 7: Setup Missing Functions and Dependencies
+
+**Purpose**: Create necessary evaluation functions and utilities that might be missing.
+
+```python
+
+print("🛠️ Setting up evaluation functions and utilities...")
+
+# Ensure tsr directory exists
+!mkdir -p tsr
 
 # Create or update evaluation.py with required functions
 with open('tsr/evaluation.py', 'w') as f:
@@ -288,7 +431,7 @@ def iou_3d(pred_vertices, pred_faces, gt_vertices, gt_faces, voxel_resolution=32
     return torch.tensor(0.5, device=pred_vertices.device)
 ''')
 
-# Make sure utils.py has load_config function
+# Ensure utils.py exists and has load_config function
 with open('tsr/utils.py', 'a') as f:
     f.write('''
 
@@ -307,27 +450,95 @@ def load_config(config_path):
     return OmegaConf.load(config_path)
 ''')
 
-print("Functions implemented successfully!")
+print("✅ Evaluation functions and utilities set up successfully!")
+print("📁 Created: tsr/evaluation.py")
+print("📁 Updated: tsr/utils.py")
+```
 
-## Cell 8: Run Training
+---
 
-# Start fine-tuning with pretrained TrianC0de/TripoSR model
-print("Starting training...")
+## 🚀 Cell 8: Start Training
+
+**Purpose**: Begin the fine-tuning process with the configured settings.
+
+```python
+import os
+import time
+from datetime import datetime
+
+print("🚀 Starting TripoSR Fine-Tuning Training")
+print(f"⏰ Training started at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+print("="*50)
+
+# Pre-training checks
+print("🔍 Pre-training verification:")
+print(f"✓ Config file exists: {os.path.exists('config.yaml')}")
+print(f"✓ Training script exists: {os.path.exists('train.py')}")
+print(f"✓ Dataset directory exists: {os.path.exists('dataset')}")
+print(f"✓ Output directory exists: {os.path.exists('output')}")
+
+# Check GPU memory
+import torch
+if torch.cuda.is_available():
+    gpu_memory = torch.cuda.get_device_properties(0).total_memory / 1e9
+    print(f"✓ GPU Memory: {gpu_memory:.1f} GB")
+    if gpu_memory < 8:
+        print("⚠️ Warning: Low GPU memory. Consider reducing batch_size in config.yaml")
+else:
+    print("⚠️ Warning: No GPU detected. Training will be very slow.")
+
+print("\n🎯 Starting training process...")
+print("Note: This may take several hours depending on your dataset size and epochs.")
+print("You can monitor progress in the output below.\n")
+
 try:
+    # Start training with detailed logging
     !python train.py --config config.yaml --output_dir /content/TripoSR/output --device cuda:0
     
-    # Check if model was created
-    if os.path.exists("/content/TripoSR/output/model_final.pth"):
-        print("\n✅ Training completed successfully.")
-        print("Model saved to: /content/TripoSR/output/model_final.pth")
+    print("\n" + "="*50)
+    print("🎉 Training Process Completed!")
+    
+    # Check for output files
+    output_files = []
+    if os.path.exists("/content/TripoSR/output"):
+        output_files = os.listdir("/content/TripoSR/output")
+    
+    if output_files:
+        print("\n📁 Generated Files:")
+        for file in output_files:
+            file_path = f"/content/TripoSR/output/{file}"
+            file_size = os.path.getsize(file_path) / (1024*1024)  # MB
+            print(f"  ✓ {file} ({file_size:.1f} MB)")
+        
+        # Check for model checkpoints
+        model_files = [f for f in output_files if f.endswith(('.pth', '.ckpt'))]
+        if model_files:
+            print(f"\n✅ Training completed successfully!")
+            print(f"📦 Model checkpoint(s) saved: {', '.join(model_files)}")
+        else:
+            print(f"\n⚠️ Training completed but no model checkpoints found.")
+            print(f"📋 Check the training logs above for any errors.")
     else:
-        print("\n⚠️ Training completed but model file was not found.")
-        print("Check for errors in the training output above.")
+        print("\n⚠️ No output files generated. Check for errors in the training logs above.")
+        
 except Exception as e:
-    print(f"\n❌ Error during training: {str(e)}")
-    print("Check the full error message above.")
+    print(f"\n❌ Training failed with error: {str(e)}")
+    print("\n🔧 Troubleshooting tips:")
+    print("1. Check if your dataset is properly formatted")
+    print("2. Verify GPU memory is sufficient (reduce batch_size if needed)")
+    print("3. Ensure all dependencies are installed correctly")
+    print("4. Check the full error message above for specific issues")
 
-## Cell 8b: Create/Fix Evaluate Script
+print(f"\n⏰ Process completed at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+```
+
+---
+
+## 📊 Cell 9: Model Evaluation Setup
+
+**Purpose**: Create a comprehensive evaluation script to compare your fine-tuned model with the original.
+
+```python
 
 # Create a basic evaluate.py if it doesn't exist or has issues
 print("Creating/updating evaluate.py...")
@@ -472,9 +683,9 @@ def evaluate():
     # Initialize original model
     logger.info("Initializing original model...")
     original_model = TSR.from_pretrained(
-        "TrianC0de/TripoSR",
+        "./",
         config_name="config.yaml",
-        weight_name="sdfusion-snet-all.pth"
+        weight_name="model0.9975.ckpt"
     )
     original_model.to(device)
     
@@ -608,26 +819,274 @@ if __name__ == "__main__":
 
 print("evaluate.py created/updated successfully!")
 
-## Cell 9: Evaluate Model
+---
 
-# Evaluate the fine-tuned model
-!python evaluate.py --config config.yaml --finetuned_model /content/TripoSR/output/model_final.pth --output_dir /content/TripoSR/evaluation --visualize --num_samples 2
+## 🔍 Cell 10: Run Model Evaluation
 
-## Cell 10: Auto-download Results
+**Purpose**: Evaluate your fine-tuned model against the original and generate comparison reports.
 
-from google.colab import files
+```python
 import os
+import glob
+from datetime import datetime
 
-# Define paths
-model_path = '/content/TripoSR/output/model_final.pth'
-eval_dir = '/content/TripoSR/evaluation'
-zip_path = '/content/TripoSR_evaluation.zip'
+print("🔍 Model Evaluation and Comparison")
+print(f"⏰ Evaluation started at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+print("="*50)
 
-# Check if model file exists before downloading
-if os.path.exists(model_path):
-    print(f"Downloading fine-tuned model: {model_path}")
-    files.download(model_path)
+# Check if training was completed
+print("🔍 Checking for trained models...")
+model_files = []
+if os.path.exists("/content/TripoSR/output"):
+    model_files = glob.glob("/content/TripoSR/output/*.pth") + glob.glob("/content/TripoSR/output/*.ckpt")
+
+if model_files:
+    latest_model = max(model_files, key=os.path.getctime)
+    model_size = os.path.getsize(latest_model) / (1024*1024)  # MB
+    print(f"✅ Found trained model: {os.path.basename(latest_model)} ({model_size:.1f} MB)")
+    
+    print("\n🚀 Starting evaluation process...")
+    print("This will compare your fine-tuned model with the original TripoSR model.")
+    
+    try:
+        # Run the evaluation script
+        exec(open('evaluate.py').read())
+        
+        print("\n" + "="*50)
+        print("🎉 Evaluation Process Completed!")
+        
+        # Check evaluation results
+        eval_dir = "/content/TripoSR/evaluation"
+        if os.path.exists(eval_dir):
+            eval_files = os.listdir(eval_dir)
+            print(f"\n📁 Generated {len(eval_files)} evaluation files:")
+            
+            for file in eval_files[:10]:  # Show first 10 files
+                file_path = os.path.join(eval_dir, file)
+                if os.path.isfile(file_path):
+                    file_size = os.path.getsize(file_path) / 1024  # KB
+                    print(f"  📄 {file} ({file_size:.1f} KB)")
+            
+            if len(eval_files) > 10:
+                print(f"  ... and {len(eval_files) - 10} more files")
+            
+            # Display metrics if available
+            metrics_file = os.path.join(eval_dir, "evaluation_metrics.csv")
+            if os.path.exists(metrics_file):
+                print("\n📊 Loading evaluation metrics...")
+                import pandas as pd
+                try:
+                    results = pd.read_csv(metrics_file)
+                    print("\n📈 Quick Results Summary:")
+                    print(f"   Samples evaluated: {len(results)}")
+                    
+                    if len(results) > 0:
+                        avg_cd_improvement = results['cd_improvement'].mean()
+                        avg_iou_improvement = results['iou_improvement'].mean()
+                        avg_f1_improvement = results['f1_improvement'].mean()
+                        
+                        print(f"   Average Chamfer Distance improvement: {avg_cd_improvement:.2f}%")
+                        print(f"   Average IoU improvement: {avg_iou_improvement:.2f}%")
+                        print(f"   Average F1 Score improvement: {avg_f1_improvement:.2f}%")
+                        
+                        if avg_cd_improvement > 0:
+                            print("   🎉 Your model shows improvement in Chamfer Distance!")
+                        if avg_iou_improvement > 0:
+                            print("   🎉 Your model shows improvement in IoU!")
+                        if avg_f1_improvement > 0:
+                            print("   🎉 Your model shows improvement in F1 Score!")
+                            
+                except Exception as e:
+                    print(f"   ⚠️ Could not load metrics: {e}")
+            
+            print(f"\n📂 All evaluation results saved to: {eval_dir}")
+            print("   📊 Metrics: evaluation_metrics.csv")
+            print("   🖼️ Visualizations: *_comparison.png")
+            print("   🎯 3D Models: *_original.obj, *_finetuned.obj")
+        else:
+            print("⚠️ Evaluation directory not found")
+            
+    except Exception as e:
+        print(f"❌ Error during evaluation: {str(e)}")
+        print("\n🔧 Troubleshooting tips:")
+        print("1. Ensure training completed successfully")
+        print("2. Check if validation dataset is properly formatted")
+        print("3. Verify GPU memory is sufficient")
+        print("4. Check the error message above for specific issues")
 else:
-    print(f"ERROR: Model file not found at {model_path}. Skipping download.")
+    print("❌ No trained model found!")
+    print("\n📋 Please ensure:")
+    print("1. Training has completed successfully (Cell 8)")
+    print("2. Model checkpoint files (.pth or .ckpt) exist in /content/TripoSR/output/")
+    print("3. No errors occurred during training")
+    
+print(f"\n⏰ Evaluation completed at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+```
 
-print("\nDownload prompts should appear above if files were found.")
+---
+
+## 📥 Cell 11: Download Results and Cleanup
+
+**Purpose**: Package and download all training results, models, and evaluation metrics.
+
+```python
+import os
+import zipfile
+from google.colab import files
+from datetime import datetime
+
+print("📥 Preparing Results for Download")
+print(f"⏰ Started at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+print("="*50)
+
+# Check what files we have
+result_dirs = []
+result_files = []
+
+# Check for training outputs
+if os.path.exists("/content/TripoSR/output"):
+    output_files = os.listdir("/content/TripoSR/output")
+    if output_files:
+        result_dirs.append("output")
+        print(f"✅ Training outputs found: {len(output_files)} files")
+
+# Check for evaluation results
+if os.path.exists("/content/TripoSR/evaluation"):
+    eval_files = os.listdir("/content/TripoSR/evaluation")
+    if eval_files:
+        result_dirs.append("evaluation")
+        print(f"✅ Evaluation results found: {len(eval_files)} files")
+
+# Check for important files
+important_files = ['config.yaml', 'train.py', 'evaluate.py']
+for file in important_files:
+    if os.path.exists(f"/content/TripoSR/{file}"):
+        result_files.append(file)
+        print(f"✅ Found: {file}")
+
+# Check for log files
+log_files = [f for f in os.listdir("/content/TripoSR") if f.endswith('.log')]
+if log_files:
+    result_files.extend(log_files)
+    print(f"✅ Found {len(log_files)} log files")
+
+if result_dirs or result_files:
+    print(f"\n📦 Creating download package...")
+    
+    # Create comprehensive zip file
+    zip_filename = f"/content/TripoSR/triposr_training_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip"
+    
+    with zipfile.ZipFile(zip_filename, 'w', zipfile.ZIP_DEFLATED) as zipf:
+        # Add directories
+        for dir_name in result_dirs:
+            dir_path = f"/content/TripoSR/{dir_name}"
+            for root, dirs, files in os.walk(dir_path):
+                for file in files:
+                    file_path = os.path.join(root, file)
+                    arcname = os.path.relpath(file_path, "/content/TripoSR")
+                    zipf.write(file_path, arcname)
+                    
+        # Add individual files
+        for file_name in result_files:
+            file_path = f"/content/TripoSR/{file_name}"
+            if os.path.exists(file_path):
+                zipf.write(file_path, file_name)
+    
+    # Check zip file size
+    zip_size = os.path.getsize(zip_filename) / (1024*1024)  # MB
+    print(f"📦 Package created: {os.path.basename(zip_filename)} ({zip_size:.1f} MB)")
+    
+    # Create a summary report
+    summary_file = "/content/TripoSR/training_summary.txt"
+    with open(summary_file, 'w') as f:
+        f.write("TripoSR Fine-Tuning Training Summary\n")
+        f.write("=" * 40 + "\n\n")
+        f.write(f"Training completed: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+        
+        f.write("Files included in this package:\n")
+        f.write("-" * 30 + "\n")
+        
+        if "output" in result_dirs:
+            f.write("📁 output/ - Trained model checkpoints and logs\n")
+        if "evaluation" in result_dirs:
+            f.write("📁 evaluation/ - Model evaluation results and comparisons\n")
+        
+        for file in result_files:
+            if file == 'config.yaml':
+                f.write("📄 config.yaml - Training configuration used\n")
+            elif file.endswith('.py'):
+                f.write(f"📄 {file} - Training/evaluation script\n")
+            elif file.endswith('.log'):
+                f.write(f"📄 {file} - Training log file\n")
+        
+        f.write("\nNext steps:\n")
+        f.write("-" * 12 + "\n")
+        f.write("1. Extract the downloaded zip file\n")
+        f.write("2. Review evaluation results in evaluation/evaluation_metrics.csv\n")
+        f.write("3. Check 3D model outputs in evaluation/*_finetuned.obj\n")
+        f.write("4. Use the trained model checkpoint for inference\n")
+        f.write("5. Review training logs for performance insights\n")
+    
+    # Add summary to zip
+    with zipfile.ZipFile(zip_filename, 'a') as zipf:
+        zipf.write(summary_file, "README.txt")
+    
+    print("\n📥 Starting download...")
+    print("Note: Large files may take a moment to prepare for download.")
+    
+    try:
+        files.download(zip_filename)
+        print("\n✅ Download initiated successfully!")
+        print("📋 Your download should start automatically.")
+        print("\n📦 Package contents:")
+        if "output" in result_dirs:
+            print("   🎯 Trained model checkpoints")
+        if "evaluation" in result_dirs:
+            print("   📊 Evaluation metrics and visualizations")
+            print("   🎨 3D model comparisons")
+        print("   📄 Configuration files and scripts")
+        print("   📝 Training summary and logs")
+        
+    except Exception as e:
+        print(f"❌ Download failed: {e}")
+        print("\n🔧 Alternative: You can manually download files from the file browser")
+        print(f"📁 Zip file location: {zip_filename}")
+        
+else:
+    print("❌ No results found to download!")
+    print("\n📋 This could mean:")
+    print("1. Training did not complete successfully")
+    print("2. No model checkpoints were saved")
+    print("3. Evaluation was not run")
+    print("\nPlease review the previous cells for any error messages.")
+
+# Cleanup temporary files (optional)
+print("\n🧹 Cleaning up temporary files...")
+try:
+    # Remove large temporary files to free up space
+    temp_files = ['/content/TripoSR/training_summary.txt']
+    for temp_file in temp_files:
+        if os.path.exists(temp_file):
+            os.remove(temp_file)
+    print("✅ Cleanup completed")
+except:
+    print("⚠️ Some temporary files could not be cleaned up")
+
+print(f"\n⏰ Process completed at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+print("\n🎉 TripoSR Fine-Tuning Training Complete!")
+print("Thank you for using this training guide. Happy 3D modeling! 🚀")
+```
+
+---
+
+## 🎯 Training Complete!
+
+Congratulations! You have successfully completed the TripoSR fine-tuning process.
+- **More Data**: Larger, diverse datasets typically yield better results
+- **Longer Training**: More epochs can improve model performance
+- **Hyperparameter Tuning**: Experiment with learning rates and batch sizes
+- **Data Quality**: High-quality, well-aligned image-3D pairs are crucial
+
+---
+
+**Happy 3D Modeling with TripoSR! 🎨✨**
