@@ -1,0 +1,76 @@
+# Colab-optimized configuration for TripoSR + OpenLRM
+# Designed for Google Colab environment with limited resources
+
+experiment:
+  parent: "triposr"  # Parent experiment name
+  child: "openlrm-colab"  # Colab-specific experiment
+  seed: 42
+
+# Model configuration (reduced for Colab)
+model:
+  tokenizer:
+    dim: 512  # Reduced from 768 for memory efficiency
+    hidden_dim: 1024  # Reduced from 1536
+    heads: 8  # Reduced from 12
+    num_tokens: 256  # Reduced from 512
+    token_dropout: 0.1
+    
+  backbone:
+    dim: 512  # Reduced from 768
+    depth: 6  # Reduced from 12 for faster training
+    heads: 8  # Reduced from 12
+    mlp_ratio: 4
+    dropout: 0.1
+    attention_dropout: 0.1
+
+# Training configuration (optimized for Colab)
+train:
+  batch_size: 2  # Small batch size for Colab memory limits
+  epochs: 5  # Reduced for demo purposes
+  accum_steps: 4  # Gradient accumulation to simulate larger batch
+  lr: 5.0e-5  # Slightly reduced learning rate
+  min_lr: 1.0e-6
+  beta1: 0.9
+  beta2: 0.999
+  weight_decay: 0.01
+  eps: 1.0e-8
+  grad_clip: 1.0
+  mixed_precision: "fp16"  # Essential for Colab memory efficiency
+  find_unused_parameters: false
+  debug_global_steps: 50  # Limited steps for demo
+  
+  loss:
+    perceptual_weight: 0.1
+
+# Validation configuration
+val:
+  batch_size: 1  # Very small for Colab
+  eval_global_steps: 25  # Frequent evaluation for demo
+
+# Data configuration
+data:
+  dataset_root: "/content/TripoSR/dataset"
+  train_split: "train"
+  val_split: "val"
+  image_size: 256
+  num_workers: 2  # Limited workers for Colab
+  pin_memory: true
+
+# Logging configuration
+logging:
+  log_dir: "/content/TripoSR/logs"
+  save_dir: "/content/TripoSR/outputs"
+  log_interval: 10
+  save_interval: 25
+  
+# Device configuration
+device: "cuda"  # Assume CUDA availability in Colab
+use_amp: true  # Automatic Mixed Precision for memory efficiency
+
+# Colab-specific optimizations
+colab:
+  enable_checkpointing: true
+  checkpoint_interval: 50
+  max_memory_usage: 0.8  # Use 80% of available GPU memory
+  enable_gradient_checkpointing: true
+  optimize_for_inference: false
