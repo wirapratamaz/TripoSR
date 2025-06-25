@@ -25,50 +25,286 @@ print("\n=== Checking Core Files ===")
 !ls -l train.py run.py
 print("================================")
 
-## 📦 Cell 2: Install Dependencies (OpenLRM + TripoSR)
+## 📦 Cell 2: Optimized Dependencies Installation
+print("🔍 Checking existing packages to minimize installation time...")
 
-# Install all required packages for the integrated system.
-# Install core ML packages
-print("Installing core ML packages...")
-!pip install -q trimesh omegaconf einops rembg huggingface-hub transformers==4.35.0 onnxruntime
+# Function to safely test package imports
+def safe_import_test():
+    try:
+        # Test basic imports first
+        import sys
+        print(f"Python version: {sys.version}")
+        
+        # Test torch first (most stable)
+        import torch
+        print(f"✅ PyTorch {torch.__version__} available")
+        
+        # Test numpy with corruption detection
+        import numpy as np
+        # Test for common corruption issues
+        _ = np.array([1, 2, 3])  # Basic array creation
+        _ = hasattr(np, 'dtypes')  # Check for dtypes attribute
+        _ = np.random.random(1)  # Test random module
+        print(f"✅ NumPy {np.__version__} working correctly")
+        
+        # Test scipy
+        import scipy
+        print(f"✅ SciPy {scipy.__version__} available")
+        
+        # Test ML packages
+        import transformers, huggingface_hub
+        print(f"✅ Transformers {transformers.__version__} available")
+        
+        return True, True  # packages_available, numpy_compatible
+        
+    except (ImportError, AttributeError, ValueError) as e:
+        error_msg = str(e).lower()
+        
+        if "no attribute 'dtypes'" in error_msg or "dtype size changed" in error_msg:
+            print(f"⚠️ NumPy corruption detected: {e}")
+            return False, False  # Need to reinstall numpy
+        elif "importerror" in error_msg:
+            print(f"📦 Missing packages detected: {e}")
+            return False, False  # Need full installation
+        else:
+            print(f"⚠️ Package compatibility issue: {e}")
+            return False, False
 
-# Install 3D processing packages
-print("Installing 3D processing packages...")
-!pip install -q git+https://github.com/tatsy/torchmcubes.git
-!pip install -q xatlas==0.0.9 imageio[ffmpeg] matplotlib pandas tqdm
+# Perform safe import test
+SKIP_HEAVY_INSTALL, NUMPY_COMPATIBLE = safe_import_test()
 
-# Install additional dependencies
-print("Installing additional dependencies...")
-!pip install -q moderngl scipy>=1.11.0 safetensors
-
-# Install OpenLRM specific requirements
-print("Installing OpenLRM requirements...")
-!pip install -q accelerate wandb tensorboard
-
-# Install additional packages for OpenLRM integration
-!pip install omegaconf hydra-core wandb
-!pip install accelerate transformers diffusers
-!pip install xformers --no-deps  # For memory efficiency
-
-# Fix huggingface_hub version compatibility
-!pip install --upgrade huggingface_hub>=0.19.0
-!pip install --upgrade transformers>=4.35.0
-
-# Install project requirements
-print("Installing project requirements...")
-!pip install -r requirements.txt
-
-# Verify GPU setup
-import torch
-print("\n=== GPU Setup Verification ===")
-print(f"CUDA available: {torch.cuda.is_available()}")
-if torch.cuda.is_available():
-    print(f"GPU: {torch.cuda.get_device_name(0)}")
-    print(f"Memory: {torch.cuda.get_device_properties(0).total_memory / 1e9:.1f} GB")
-    print(f"CUDA version: {torch.version.cuda}")
+# Enhanced installation logic with corruption handling
+if not SKIP_HEAVY_INSTALL or not NUMPY_COMPATIBLE:
+    print("🚀 Installing dependencies with enhanced error handling...")
+    
+    # Critical: Handle corrupted numpy/scipy first
+    if not NUMPY_COMPATIBLE:
+        print("🔧 Fixing corrupted NumPy/SciPy installation...")
+        print("   This may require a runtime restart if corruption is severe.")
+        
+        # Force clean uninstall of corrupted packages
+        !pip uninstall -y numpy scipy matplotlib pandas --quiet
+        !pip cache purge --quiet
+        
+        # Install clean versions with specific compatibility
+        print("   Installing clean NumPy/SciPy...")
+        !pip install numpy==1.24.4 --no-cache-dir --force-reinstall --quiet
+        !pip install scipy==1.10.1 --no-cache-dir --force-reinstall --quiet
+        !pip install matplotlib pandas --no-cache-dir --quiet
+        
+        # Verify the fix worked and reinstall dependent packages
+         try:
+             import numpy as np
+             _ = np.array([1, 2, 3])
+             _ = hasattr(np, 'dtypes')
+             print("   ✅ NumPy corruption fixed!")
+             
+             # Reinstall packages that depend on numpy to clear cached imports
+             print("   🔄 Reinstalling numpy-dependent packages...")
+             !pip install --force-reinstall --no-cache-dir transformers==4.35.0 --quiet
+             !pip install --force-reinstall --no-cache-dir scikit-learn --quiet 2>/dev/null || true
+             print("   ✅ Dependent packages reinstalled!")
+             
+         except Exception as e:
+             print(f"   ⚠️ NumPy still corrupted: {e}")
+             print("   Please restart runtime and run this cell again.")
+    
+    # Batch 1: Core system packages (lightweight, no conflicts)
+    print("📦 Installing core packages...")
+    !pip install -q trimesh omegaconf einops rembg imageio[ffmpeg] tqdm moderngl
+    
+    # Batch 2: ML packages with tested versions
+    print("🤖 Installing ML packages...")
+    !pip install -q transformers==4.35.0 huggingface-hub>=0.20.0 safetensors>=0.4.0
+    
+    # Batch 3: 3D processing packages
+    print("🎯 Installing 3D processing packages...")
+    !pip install -q git+https://github.com/tatsy/torchmcubes.git
+    !pip install -q xatlas==0.0.9 onnxruntime
+    
+    # Batch 4: Training and logging packages
+    print("📊 Installing training packages...")
+    !pip install -q accelerate wandb tensorboard hydra-core diffusers
+    
+    # Batch 5: Memory optimization (install last to avoid conflicts)
+    print("⚡ Installing memory optimization...")
+    !pip install -q xformers --no-deps
+    
+    print("✅ Installation completed!")
 else:
-    print("⚠️ WARNING: CUDA not available. Training will be very slow.")
-print("================================")
+    print("⚡ All packages are compatible, skipping installation!")
+
+# COMPREHENSIVE verification with detailed diagnostics
+print("\n🔍 Final verification of critical packages...")
+
+def verify_installation():
+    """Comprehensive verification of all installed packages"""
+    verification_results = []
+    
+    # Test core packages
+    packages_to_test = [
+        ('torch', 'PyTorch'),
+        ('transformers', 'Transformers'),
+        ('huggingface_hub', 'Hugging Face Hub'),
+        ('numpy', 'NumPy'),
+        ('scipy', 'SciPy'),
+        ('trimesh', 'Trimesh'),
+        ('omegaconf', 'OmegaConf'),
+        ('einops', 'Einops')
+    ]
+    
+    for package_name, display_name in packages_to_test:
+        try:
+            module = __import__(package_name)
+            version = getattr(module, '__version__', 'unknown')
+            verification_results.append(f"✅ {display_name}: {version}")
+            
+            # Special test for numpy functionality
+            if package_name == 'numpy':
+                _ = module.array([1, 2, 3])
+                _ = hasattr(module, 'dtypes')
+                _ = module.random.random(1)
+                verification_results.append("   └─ NumPy functionality: OK")
+                
+        except Exception as e:
+            verification_results.append(f"❌ {display_name}: {str(e)[:50]}...")
+    
+    return verification_results
+
+# Run verification
+results = verify_installation()
+for result in results:
+    print(result)
+
+# Test CUDA availability
+try:
+    import torch
+    print(f"\n🎮 CUDA Available: {torch.cuda.is_available()}")
+    if torch.cuda.is_available():
+        print(f"   GPU: {torch.cuda.get_device_name(0)}")
+except:
+    print("\n⚠️ Could not check CUDA availability")
+
+# Enhanced final status with recovery suggestions
+failed_packages = [result for result in results if '❌' in result and not result.startswith('   └─')]
+
+if not failed_packages:
+    print("\n🎉 All dependencies verified and ready!")
+    print("📝 You can now proceed to the next cells.")
+else:
+    print(f"\n⚠️ {len(failed_packages)} package(s) failed verification:")
+    for failed in failed_packages:
+        print(f"   {failed}")
+    
+    # Provide specific recovery suggestions
+    if any('numpy' in failed.lower() or 'dtypes' in failed.lower() for failed in failed_packages):
+        print("\n🔧 NumPy-related issues detected:")
+        print("   1. Restart runtime (Runtime → Restart runtime)")
+        print("   2. Re-run this cell - it will auto-fix numpy corruption")
+        print("   3. If still failing, clear all outputs and restart session")
+    else:
+        print("\n💡 Recovery suggestions:")
+        print("   1. Try restarting the runtime and running this cell again")
+        print("   2. If issues persist, the installation will auto-fix on next run")
+        print("   3. Check internet connection for package downloads")
+    
+    print("\n📊 Installation Summary:")
+    print(f"   ✅ Working: {len([r for r in results if '✅' in r and not r.startswith('   └─')])}")
+    print(f"   ❌ Failed: {len(failed_packages)}")
+    print(f"   📦 Total: {len([r for r in results if not r.startswith('   └─')])}")
+
+# Memory cleanup suggestion
+ print("\n🧹 Memory optimization tip:")
+ print("   After successful verification, consider restarting runtime to clear import cache.")
+ print("   This ensures optimal memory usage for training.")
+
+# Install project requirements with enhanced error handling
+print("\n📋 Installing project requirements...")
+
+# Check if requirements.txt exists and install with better error handling
+import os
+if os.path.exists('requirements.txt'):
+    print("   Found requirements.txt, installing...")
+    !pip install -q -r requirements.txt 2>/dev/null || pip install -r requirements.txt
+else:
+    print("   No requirements.txt found, skipping...")
+
+# Handle common warnings and conflicts
+print("\n🔧 Resolving common package conflicts...")
+# Fix typer warning by ensuring proper installation
+!pip install --upgrade typer --quiet 2>/dev/null || true
+# Ensure compatible versions for common conflicts
+!pip install --upgrade click>=8.0.0 --quiet 2>/dev/null || true
+
+# Create installation health check function for reuse
+def installation_health_check():
+    """Comprehensive health check that can be called from any cell"""
+    print("🏥 Installation Health Check:")
+    
+    health_score = 0
+    total_checks = 5
+    
+    # Check 1: Core ML packages
+    try:
+        import torch, transformers, numpy
+        print("   ✅ Core ML packages: OK")
+        health_score += 1
+    except Exception as e:
+        print(f"   ❌ Core ML packages: {str(e)[:30]}...")
+    
+    # Check 2: NumPy functionality
+    try:
+        import numpy as np
+        _ = np.array([1, 2, 3])
+        _ = hasattr(np, 'dtypes')
+        _ = np.random.random(1)
+        print("   ✅ NumPy functionality: OK")
+        health_score += 1
+    except Exception as e:
+        print(f"   ❌ NumPy functionality: {str(e)[:30]}...")
+    
+    # Check 3: CUDA availability
+    try:
+        import torch
+        if torch.cuda.is_available():
+            print("   ✅ CUDA support: Available")
+            health_score += 1
+        else:
+            print("   ⚠️ CUDA support: Not available (CPU only)")
+    except:
+        print("   ❌ CUDA support: Cannot check")
+    
+    # Check 4: 3D processing packages
+    try:
+        import trimesh, torchmcubes
+        print("   ✅ 3D processing: OK")
+        health_score += 1
+    except Exception as e:
+        print(f"   ❌ 3D processing: {str(e)[:30]}...")
+    
+    # Check 5: Training packages
+    try:
+        import accelerate, wandb
+        print("   ✅ Training packages: OK")
+        health_score += 1
+    except Exception as e:
+        print(f"   ❌ Training packages: {str(e)[:30]}...")
+    
+    # Health score
+    health_percentage = (health_score / total_checks) * 100
+    print(f"\n📊 Health Score: {health_score}/{total_checks} ({health_percentage:.0f}%)")
+    
+    if health_percentage >= 80:
+        print("🎉 System is healthy and ready for training!")
+    elif health_percentage >= 60:
+        print("⚠️ System has minor issues but should work")
+    else:
+        print("❌ System needs attention before proceeding")
+    
+    return health_score, total_checks
+
+print("\n📋 Installation health check function created.")
+print("💡 Call installation_health_check() from any cell to verify system status.")
 
 ## 📁 Cell 3: Setup Directory Structure
 
@@ -333,6 +569,56 @@ import os
 sys.path.append('/content/TripoSR/openlrm_integration')
 sys.path.append('/content/TripoSR')
 
+# Create required config directory and file for OpenLRM base trainer
+import os
+os.makedirs('/content/assets', exist_ok=True)
+
+# Copy our colab config to the expected location
+import shutil
+if os.path.exists('/content/TripoSR/openlrm_integration/configs/colab_config.yaml'):
+    shutil.copy('/content/TripoSR/openlrm_integration/configs/colab_config.yaml', '/content/assets/config.yaml')
+    print("✅ Config file copied to expected location")
+else:
+    # Create a minimal config file if colab_config doesn't exist
+    minimal_config = """
+experiment:
+  name: "triposr_colab"
+  parent: "triposr"
+  child: "colab"
+  seed: 42
+
+model:
+  name: "triposr"
+  
+train:
+  mixed_precision: "fp16"
+  accum_steps: 1
+  find_unused_parameters: false
+  lr: 1e-4
+  beta1: 0.9
+  beta2: 0.999
+  weight_decay: 0.01
+  eps: 1e-8
+  epochs: 3
+  min_lr: 1e-6
+  loss:
+    perceptual_weight: 1.0
+
+logger:
+  stream_level: "INFO"
+  log_level: "INFO"
+  log_root: "/content/logs"
+  trackers: []
+  tracker_root: "/content/logs"
+
+compile:
+  backend: "inductor"
+  mode: "default"
+"""
+    with open('/content/assets/config.yaml', 'w') as f:
+        f.write(minimal_config)
+    print("✅ Minimal config file created")
+
 # Import OpenLRM integration components with error handling
 try:
     # First, try to fix the huggingface_hub import issue
@@ -342,8 +628,14 @@ try:
     # Check if the required function exists
     if not hasattr(huggingface_hub, 'split_torch_state_dict_into_shards'):
         print("⚠️ Updating huggingface_hub for compatibility...")
-        !pip install --upgrade huggingface_hub>=0.20.0 --quiet
+        !pip install --upgrade huggingface_hub>=0.21.0 --force-reinstall --quiet
+        !pip install --upgrade safetensors>=0.4.0 --force-reinstall --quiet
         importlib.reload(huggingface_hub)
+        
+        # Double-check after reload
+        if not hasattr(huggingface_hub, 'split_torch_state_dict_into_shards'):
+            print("⚠️ Function still missing after update, using fallback mode")
+            raise ImportError("Required function not available, switching to fallback")
     
     from openlrm_integration.trainers.openlrm_trainer import TripoSRTrainer
     from openlrm_integration.visible_training_loop import VisibleTrainingLoop
@@ -351,14 +643,20 @@ try:
     from openlrm_integration.data.dataset import build_dataloader
     print("✅ OpenLRM integration components imported successfully!")
     
-except ImportError as e:
-    print(f"⚠️ Import error: {e}")
+except (ImportError, ValueError, AttributeError, FileNotFoundError) as e:
+    print(f"⚠️ Import/Compatibility error: {e}")
+    
+    # Handle specific scipy/numpy ufunc error
+    if "ufunc" in str(e) or "scipy" in str(e).lower():
+        print("⚠️ Detected scipy/numpy compatibility issue, fixing...")
+        !pip install --upgrade numpy>=1.24.0 scipy>=1.10.0 --force-reinstall --quiet
+        print("Restarting runtime may be required for scipy fixes...")
+    
     print("Setting up enhanced fallback imports...")
     
     # Create enhanced trainer class for testing
     class TripoSRTrainer:
-        def __init__(self, config):
-            self.config = config
+        def __init__(self):
             self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
             print(f"Enhanced fallback trainer initialized on {self.device}")
         
@@ -401,24 +699,102 @@ try:
     
 except FileNotFoundError:
     print("⚠️ Configuration file not found, using default config...")
-    # Use default configuration
+    # Use comprehensive default configuration with all required keys
     config = OmegaConf.create({
-        'model': {'name': 'triposr'},
-        'training': {'batch_size': 1, 'epochs': 3},
+        'experiment': {
+            'name': 'triposr_colab',
+            'parent': 'triposr',
+            'child': 'colab',
+            'seed': 42
+        },
+        'model': {
+            'name': 'triposr'
+        },
+        'train': {
+            'mixed_precision': 'fp16',
+            'accum_steps': 1,
+            'find_unused_parameters': False,
+            'lr': 1e-4,
+            'beta1': 0.9,
+            'beta2': 0.999,
+            'weight_decay': 0.01,
+            'eps': 1e-8,
+            'epochs': 3,
+            'min_lr': 1e-6,
+            'loss': {
+                'perceptual_weight': 1.0
+            }
+        },
+        'logger': {
+            'stream_level': 'INFO',
+            'log_level': 'INFO',
+            'log_root': '/content/logs',
+            'trackers': [],
+            'tracker_root': '/content/logs'
+        },
+        'compile': {
+            'backend': 'inductor',
+            'mode': 'default'
+        },
         'device': 'cuda' if torch.cuda.is_available() else 'cpu'
     })
+    
+    # Create the assets config file with complete configuration
+    with open('/content/assets/config.yaml', 'w') as f:
+        f.write(OmegaConf.to_yaml(config))
+    print("✅ Created assets config with complete configuration")
+    
     trainer = TripoSRTrainer()
     print("✅ TripoSR + OpenLRM trainer initialized with default config!")
     
 except Exception as e:
     print(f"⚠️ Configuration error: {e}")
     print("Using fallback configuration...")
-    # Create minimal config for fallback
+    # Create comprehensive config for fallback with all required keys
     config = OmegaConf.create({
-        'model': {'name': 'triposr'},
-        'training': {'batch_size': 1, 'epochs': 3},
+        'experiment': {
+            'name': 'triposr_colab',
+            'parent': 'triposr',
+            'child': 'colab',
+            'seed': 42
+        },
+        'model': {
+            'name': 'triposr'
+        },
+        'train': {
+            'mixed_precision': 'fp16',
+            'accum_steps': 1,
+            'find_unused_parameters': False,
+            'lr': 1e-4,
+            'beta1': 0.9,
+            'beta2': 0.999,
+            'weight_decay': 0.01,
+            'eps': 1e-8,
+            'epochs': 3,
+            'min_lr': 1e-6,
+            'loss': {
+                'perceptual_weight': 1.0
+            }
+        },
+        'logger': {
+            'stream_level': 'INFO',
+            'log_level': 'INFO',
+            'log_root': '/content/logs',
+            'trackers': [],
+            'tracker_root': '/content/logs'
+        },
+        'compile': {
+            'backend': 'inductor',
+            'mode': 'default'
+        },
         'device': 'cuda' if torch.cuda.is_available() else 'cpu'
     })
+    
+    # Also update the assets config file with complete configuration
+    with open('/content/assets/config.yaml', 'w') as f:
+        f.write(OmegaConf.to_yaml(config))
+    print("✅ Updated assets config with complete configuration")
+    
     trainer = TripoSRTrainer()
     print("✅ TripoSR + OpenLRM trainer initialized with fallback config!")
 
@@ -466,8 +842,10 @@ for epoch in range(EPOCHS):
     num_batches = 5  # Simulated batches
     
     for batch in range(num_batches):
-        # Simulate batch processing
-        batch_loss = np.random.exponential(0.5) + 0.1 * np.exp(-epoch * 0.3)
+        # Simulate batch processing (using Python random to avoid numpy compatibility issues)
+        import random
+        import math
+        batch_loss = random.expovariate(2.0) + 0.1 * math.exp(-epoch * 0.3)
         train_loss += batch_loss
         
         # Progress update
@@ -479,7 +857,8 @@ for epoch in range(EPOCHS):
     train_losses.append(train_loss)
     
     # Validation phase
-    val_loss = train_loss * (0.8 + 0.4 * np.random.random())
+    import random
+    val_loss = train_loss * (0.8 + 0.4 * random.random())
     val_losses.append(val_loss)
     
     # Epoch timing
@@ -521,7 +900,8 @@ for epoch in range(EPOCHS):
     
     # Plot 4: GPU utilization simulation
     ax4.clear()
-    gpu_util = [70 + 20 * np.sin(i * 0.5) + 5 * np.random.random() for i in range(len(train_losses))]
+    import random, math
+    gpu_util = [70 + 20 * math.sin(i * 0.5) + 5 * random.random() for i in range(len(train_losses))]
     ax4.plot(range(1, len(gpu_util)+1), gpu_util, 'orange', linewidth=2)
     ax4.set_xlabel('Epoch')
     ax4.set_ylabel('GPU Utilization (%)')
