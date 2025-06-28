@@ -455,6 +455,12 @@ def safe_launch_interface(port=7861, listen=False, share=False):
     try:
         print("🚀 Starting 3D Model Preview Interface...")
         
+        # Check Gradio version for compatibility
+        print(f"📋 Gradio version: {gr.__version__}")
+        if gr.__version__.startswith('4.8') or gr.__version__ < '4.44.0':
+            print("⚠️  WARNING: Older Gradio version detected. Consider upgrading to fix Pydantic issues:")
+            print("   pip install --upgrade gradio>=4.44.1")
+        
         # Check if models are available before launching
         available_models = get_available_models()
         if not available_models:
@@ -474,7 +480,17 @@ def safe_launch_interface(port=7861, listen=False, share=False):
         )
         
     except Exception as e:
-        print(f"❌ Failed to launch interface with full options: {str(e)}")
+        error_str = str(e)
+        print(f"❌ Failed to launch interface with full options: {error_str}")
+        
+        # Check for specific Pydantic error
+        if "PydanticSchemaGenerationError" in error_str or "starlette.requests.Request" in error_str:
+            print("\n🔍 Detected PydanticSchemaGenerationError - this is a known compatibility issue")
+            print("💡 Solution: Upgrade Gradio to version 4.44.1 or newer:")
+            print("   pip install --upgrade gradio>=4.44.1")
+            print("   Then restart your runtime/kernel and try again")
+            return
+        
         print("🔄 Trying fallback launch...")
         
         try:
@@ -487,12 +503,22 @@ def safe_launch_interface(port=7861, listen=False, share=False):
                 quiet=True
             )
         except Exception as fallback_error:
-            print(f"❌ Fallback launch also failed: {str(fallback_error)}")
+            fallback_str = str(fallback_error)
+            print(f"❌ Fallback launch also failed: {fallback_str}")
+            
+            # Check for Pydantic error in fallback too
+            if "PydanticSchemaGenerationError" in fallback_str or "starlette.requests.Request" in fallback_str:
+                print("\n🔍 PydanticSchemaGenerationError persists in fallback launch")
+                print("💡 This confirms a Gradio version compatibility issue")
+                print("🔧 Required action: Upgrade Gradio and restart runtime")
+                return
+            
             print("\n🔧 Troubleshooting tips:")
-            print("1. Make sure all dependencies are installed: pip install gradio plotly trimesh numpy")
-            print("2. Check if port is available")
-            print("3. Try running without --share flag")
-            print("4. Ensure models exist in ./outputs directory")
+            print("1. Upgrade Gradio: pip install --upgrade gradio>=4.44.1")
+            print("2. Make sure all dependencies are installed: pip install plotly trimesh numpy")
+            print("3. Check if port is available")
+            print("4. Try running without --share flag")
+            print("5. Ensure models exist in ./outputs directory")
             raise
 
 if __name__ == '__main__':

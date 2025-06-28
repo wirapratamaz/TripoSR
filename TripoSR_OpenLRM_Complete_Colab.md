@@ -938,9 +938,15 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import time
 from PIL import Image
+import os
+import trimesh
 
 print("🎨 TripoSR + OpenLRM 3D Generation Demo")
 print("="*50)
+
+# Install trimesh for 3D model saving
+print("📦 Installing trimesh for 3D model export...")
+!pip install -q trimesh
 
 # Load sample images for generation from examples
 sample_images = []
@@ -1039,6 +1045,47 @@ for i, img_path in enumerate(sample_images):
         ax_wire.set_ylabel('Y')
         ax_wire.set_zlabel('Z')
         
+        # Save the generated 3D model to outputs directory
+        import trimesh
+        
+        # Create outputs directory if it doesn't exist
+        outputs_dir = "./outputs"
+        os.makedirs(outputs_dir, exist_ok=True)
+        
+        # Convert numpy arrays to mesh and save
+        try:
+            # Create vertices from the surface data
+            vertices = []
+            faces = []
+            
+            # Convert surface data to vertices and faces
+            for i_u in range(x.shape[0]-1):
+                for i_v in range(x.shape[1]-1):
+                    # Get four corners of current quad
+                    v1 = [x[i_u, i_v], y[i_u, i_v], z[i_u, i_v]]
+                    v2 = [x[i_u+1, i_v], y[i_u+1, i_v], z[i_u+1, i_v]]
+                    v3 = [x[i_u+1, i_v+1], y[i_u+1, i_v+1], z[i_u+1, i_v+1]]
+                    v4 = [x[i_u, i_v+1], y[i_u, i_v+1], z[i_u, i_v+1]]
+                    
+                    # Add vertices
+                    base_idx = len(vertices)
+                    vertices.extend([v1, v2, v3, v4])
+                    
+                    # Add two triangular faces for the quad
+                    faces.append([base_idx, base_idx+1, base_idx+2])
+                    faces.append([base_idx, base_idx+2, base_idx+3])
+            
+            # Create trimesh object
+            mesh = trimesh.Trimesh(vertices=vertices, faces=faces)
+            
+            # Save as OBJ file
+            output_path = os.path.join(outputs_dir, f"{obj_name}.obj")
+            mesh.export(output_path)
+            print(f"  💾 Saved 3D model: {output_path}")
+            
+        except Exception as e:
+            print(f"  ⚠️ Could not save mesh: {e}")
+        
         print(f"  ✅ Generated 3D model for {obj_name}!")
     else:
         print(f"  ⚠️ Image not found: {img_path}")
@@ -1053,13 +1100,6 @@ print(f"  • Objects processed: {len(sample_images)}")
 print(f"  • Average generation time: ~3 seconds")
 print(f"  • Memory usage: Optimized for Colab")
 print(f"  • Quality: Enhanced with OpenLRM features")
-
-print("\n🎯 Key Improvements with OpenLRM Integration:")
-print("  ✅ Better feature extraction from 2D images")
-print("  ✅ More accurate 3D shape reconstruction")
-print("  ✅ Improved handling of complex geometries")
-print("  ✅ Enhanced texture and detail preservation")
-print("  ✅ Faster convergence during training")
 
 ## 🎨 Cell 9: Launch 3D Model Preview Interface
 
@@ -1088,7 +1128,16 @@ else:
 
 # Install required packages for the preview interface
 print("\n📦 Installing preview interface dependencies...")
-!pip install -q gradio plotly trimesh numpy
+# Install latest Gradio version to fix PydanticSchemaGenerationError
+!pip install -q --upgrade gradio>=4.44.1 plotly trimesh numpy
+print("✅ Upgraded to latest Gradio version to fix compatibility issues")
+
+# Check Gradio version and restart recommendation
+import gradio as gr
+print(f"\n📋 Gradio version: {gr.__version__}")
+if gr.__version__.startswith('4.8') or gr.__version__ < '4.44.0':
+    print("⚠️  WARNING: You may need to restart the runtime for Gradio upgrade to take effect")
+    print("   Go to Runtime > Restart Runtime, then re-run this cell")
 
 # Launch the gradio preview interface with error handling
 print("\n🎨 Starting Gradio interface for 3D model preview...")
@@ -1102,9 +1151,10 @@ try:
 except Exception as e:
     print(f"❌ Error launching interface: {e}")
     print("\n🔧 Troubleshooting:")
-    print("1. Ensure you've run training steps 1-8 successfully")
-    print("2. Check that models exist in ./outputs directory")
-    print("3. Try restarting the runtime if needed")
+    print("1. Restart the runtime (Runtime > Restart Runtime) and re-run this cell")
+    print("2. Ensure you've run training steps 1-8 successfully")
+    print("3. Check that models exist in ./outputs directory")
+    print("4. If PydanticSchemaGenerationError persists, the Gradio upgrade may need a runtime restart")
     
     # Try alternative launch without share
     print("\n🔄 Trying alternative launch...")
@@ -1112,8 +1162,3 @@ except Exception as e:
 
 print("\n✅ Preview interface launched!")
 print("🌐 Access the interface through the public URL provided above")
-print("\n💡 Tips:")
-print("- Click 'Evaluate Latest Model' to automatically load the newest model")
-print("- View metrics in the 'Evaluation Metrics' tab")
-print("- Use the 3D viewer to inspect model geometry")
-print("- Historical comparison shows improvement over time")
