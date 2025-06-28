@@ -275,56 +275,33 @@ def load_and_evaluate_model(model_filename, reference_model=None):
         error_msg = f"Error loading model {model_filename}: {str(e)}"
         return None, None, error_msg, go.Figure(), go.Figure(), 0, 0, 0, 0, 0
 
-def refresh_model_list():
-    """Refresh the list of available models"""
-    models = get_available_models()
-    if models:
-        return gr.Dropdown.update(choices=models, value=models[0])
-    else:
-        return gr.Dropdown.update(choices=[], value=None)
-
 # Create the Gradio interface
 with gr.Blocks(title="3D Model Preview & Evaluation") as interface:
     gr.Markdown(
         """
 # 3D Model Preview & Evaluation
 
-Preview and evaluate 3D models generated from the training process.
-This interface displays models from the `outputs` directory and provides comprehensive metrics evaluation.
+Preview and evaluate the latest 3D model generated from the training process.
+This interface automatically loads the most recent model from the `outputs` directory and provides comprehensive metrics evaluation.
 
 ## Features:
-- Load and preview generated 3D models (OBJ/GLB)
+- Automatically load and preview the latest generated 3D model (OBJ/GLB)
 - Calculate and visualize evaluation metrics
 - Compare current model with historical averages
-- Optional reference model comparison for accurate metrics
+- Interactive 3D model viewer with multiple display options
         """
     )
     
     with gr.Row(variant="panel"):
         with gr.Column():
-            with gr.Row():
-                model_dropdown = gr.Dropdown(
-                    label="Select Generated Model",
-                    choices=get_available_models(),
-                    value=get_available_models()[0] if get_available_models() else None,
-                    interactive=True
-                )
-                refresh_btn = gr.Button("🔄 Refresh", size="sm")
-            
-            reference_model = gr.File(
-                label="Reference Model (OBJ/GLB/STL) [optional]", 
-                file_types=[".obj", ".glb", ".stl"]
-            )
-            
-            evaluate_btn = gr.Button("📊 Evaluate Model", variant="primary")
+            evaluate_btn = gr.Button("📊 Evaluate Latest Model", variant="primary")
             
             gr.Markdown(
                 """
 ### Instructions:
-1. Select a generated model from the dropdown
-2. Optionally upload a reference model for comparison
-3. Click "Evaluate Model" to view metrics and 3D preview
-4. Use "Refresh" to update the model list after generating new models
+1. Click "Evaluate Latest Model" to automatically load and evaluate the most recent generated model
+2. View comprehensive metrics and 3D preview in the tabs below
+3. The interface will automatically detect models from the outputs directory
                 """
             )
         
@@ -383,15 +360,9 @@ This interface displays models from the `outputs` directory and provides compreh
                     """)
     
     # Event handlers
-    refresh_btn.click(
-        fn=refresh_model_list,
-        inputs=[],
-        outputs=[model_dropdown]
-    )
-    
     evaluate_btn.click(
-        fn=load_and_evaluate_model,
-        inputs=[model_dropdown, reference_model],
+        fn=lambda: load_and_evaluate_model(get_available_models()[0] if get_available_models() else None, None),
+        inputs=[],
         outputs=[
             output_model_obj,
             output_model_obj,  # Same model for both displays
