@@ -24,6 +24,9 @@ print("=== Checking OpenLRM Integration ===")
 print("\n=== Checking Core Files ===")
 !ls -l train.py run.py
 print("================================")
+print("\n=== Latest Commit Information ===")
+!git log --oneline -1
+print("================================")
 
 ## 📦 Cell 2: Optimized Dependencies Installation
 print("🔍 Checking existing packages to minimize installation time...")
@@ -1063,18 +1066,54 @@ print("  ✅ Faster convergence during training")
 # Launch the Gradio preview interface to visualize and evaluate generated 3D models.
 print("🚀 Launching 3D Model Preview & Evaluation Interface...")
 
+# Check if models exist from previous training steps
+import os
+import glob
+
+outputs_dir = "./outputs"
+if os.path.exists(outputs_dir):
+    model_files = glob.glob(os.path.join(outputs_dir, "*.obj")) + glob.glob(os.path.join(outputs_dir, "*.glb"))
+    if model_files:
+        print(f"✅ Found {len(model_files)} model(s) from previous training steps")
+        for model in model_files[:3]:  # Show first 3 models
+            print(f"   📄 {os.path.basename(model)}")
+        if len(model_files) > 3:
+            print(f"   ... and {len(model_files) - 3} more")
+    else:
+        print("⚠️  No models found in outputs directory!")
+        print("   Please run training steps 1-8 first to generate 3D models.")
+else:
+    print("⚠️  Outputs directory not found!")
+    print("   Please run training steps 1-8 first to generate 3D models.")
+
 # Install required packages for the preview interface
-print("📦 Installing preview interface dependencies...")
+print("\n📦 Installing preview interface dependencies...")
 !pip install -q gradio plotly trimesh numpy
 
-# Launch the gradio preview interface
-print("🎨 Starting Gradio interface for 3D model preview...")
+# Launch the gradio preview interface with error handling
+print("\n🎨 Starting Gradio interface for 3D model preview...")
 print("📍 This interface will display models from the outputs directory")
 print("📊 Includes comprehensive metrics evaluation and visualization")
-print("🔄 Supports model comparison and historical tracking")
+print("🔄 Automatically loads the latest generated model")
 
-# Run the gradio preview application
-!python gradio_preview.py --share --port 7860
+try:
+    # Run the gradio preview application
+    !python gradio_preview.py --share --port 7860
+except Exception as e:
+    print(f"❌ Error launching interface: {e}")
+    print("\n🔧 Troubleshooting:")
+    print("1. Ensure you've run training steps 1-8 successfully")
+    print("2. Check that models exist in ./outputs directory")
+    print("3. Try restarting the runtime if needed")
+    
+    # Try alternative launch without share
+    print("\n🔄 Trying alternative launch...")
+    !python gradio_preview.py --port 7860
 
 print("\n✅ Preview interface launched!")
 print("🌐 Access the interface through the public URL provided above")
+print("\n💡 Tips:")
+print("- Click 'Evaluate Latest Model' to automatically load the newest model")
+print("- View metrics in the 'Evaluation Metrics' tab")
+print("- Use the 3D viewer to inspect model geometry")
+print("- Historical comparison shows improvement over time")

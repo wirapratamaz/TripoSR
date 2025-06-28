@@ -172,33 +172,88 @@ def create_metrics_bar_chart(current_metrics):
     
     return fig
 
+def validate_model_file(file_path):
+    """Validate if a model file is properly formatted and readable"""
+    try:
+        if not os.path.exists(file_path):
+            return False, "File does not exist"
+        
+        if os.path.getsize(file_path) == 0:
+            return False, "File is empty"
+        
+        # Try to load with trimesh to validate format
+        mesh = trimesh.load(file_path)
+        if mesh is None:
+            return False, "Could not load mesh data"
+        
+        return True, "Valid model file"
+    except Exception as e:
+        return False, f"Validation error: {str(e)}"
+
 def get_available_models():
-    """Get list of available generated models"""
+    """Get list of available generated models with validation"""
     outputs_dir = "./outputs"
+    
+    # Create outputs directory if it doesn't exist
     if not os.path.exists(outputs_dir):
+        try:
+            os.makedirs(outputs_dir)
+            print(f"Created outputs directory: {outputs_dir}")
+        except Exception as e:
+            print(f"Could not create outputs directory: {e}")
         return []
     
     # Look for .obj and .glb files
-    obj_files = glob.glob(os.path.join(outputs_dir, "*.obj"))
-    glb_files = glob.glob(os.path.join(outputs_dir, "*.glb"))
+    try:
+        obj_files = glob.glob(os.path.join(outputs_dir, "*.obj"))
+        glb_files = glob.glob(os.path.join(outputs_dir, "*.glb"))
+        
+        # Validate and filter files
+        valid_files = []
+        for file_path in obj_files + glb_files:
+            is_valid, message = validate_model_file(file_path)
+            if is_valid:
+                valid_files.append(file_path)
+            else:
+                print(f"Skipping invalid file {file_path}: {message}")
+        
+        # Sort by modification time (newest first)
+        valid_files.sort(key=lambda x: os.path.getmtime(x), reverse=True)
+        
+        # Return just filenames
+        return [os.path.basename(f) for f in valid_files]
     
-    # Combine and sort by modification time (newest first)
-    all_files = obj_files + glb_files
-    all_files.sort(key=lambda x: os.path.getmtime(x), reverse=True)
-    
-    # Return just filenames for dropdown
-    return [os.path.basename(f) for f in all_files]
+    except Exception as e:
+        print(f"Error scanning for models: {e}")
+        return []
 
 def load_and_evaluate_model(model_filename, reference_model=None):
-    """Load a model and calculate its metrics"""
+    """Load a model and calculate its metrics with robust error handling"""
+    # Check if any models are available
+    available_models = get_available_models()
+    if not available_models:
+        error_msg = """No models found in outputs directory.
+        
+Please ensure you have:
+1. Run training steps 1-8 from the notebook
+2. Generated at least one 3D model
+3. Models are saved in ./outputs directory
+        
+Supported formats: .obj, .glb"""
+        return None, None, error_msg, go.Figure(), go.Figure(), 0, 0, 0, 0, 0
+    
+    # Use the latest model if no specific model is provided
     if not model_filename:
-        return None, None, "No model selected", go.Figure(), go.Figure(), 0, 0, 0, 0, 0
+        model_filename = available_models[0]
+        print(f"Auto-selecting latest model: {model_filename}")
     
     outputs_dir = "./outputs"
     model_path = os.path.join(outputs_dir, model_filename)
     
-    if not os.path.exists(model_path):
-        return None, None, f"Model file not found: {model_filename}", go.Figure(), go.Figure(), 0, 0, 0, 0, 0
+    # Validate the model file
+    is_valid, validation_message = validate_model_file(model_path)
+    if not is_valid:
+        return None, None, f"Invalid model file {model_filename}: {validation_message}", go.Figure(), go.Figure(), 0, 0, 0, 0, 0
     
     try:
         # Load the mesh
@@ -395,6 +450,51 @@ This interface automatically loads the most recent model from the `outputs` dire
         ]
     )
 
+def safe_launch_interface(port=7861, listen=False, share=False):
+    """Safely launch the Gradio interface with error handling"""
+    try:
+        print("🚀 Starting 3D Model Preview Interface...")
+        
+        # Check if models are available before launching
+        available_models = get_available_models()
+        if not available_models:
+            print("⚠️  Warning: No models found in outputs directory.")
+            print("   Make sure to run training steps 1-8 first to generate models.")
+        else:
+            print(f"✅ Found {len(available_models)} model(s) ready for evaluation")
+        
+        # Launch with error handling
+        interface.launch(
+            server_port=port,
+            server_name="0.0.0.0" if listen else None,
+            share=share,
+            debug=False,  # Disable debug to avoid Pydantic issues
+            show_error=True,
+            quiet=False
+        )
+        
+    except Exception as e:
+        print(f"❌ Failed to launch interface with full options: {str(e)}")
+        print("🔄 Trying fallback launch...")
+        
+        try:
+            # Fallback to minimal launch
+            interface.launch(
+                server_port=port,
+                share=share,
+                debug=False,
+                show_error=False,
+                quiet=True
+            )
+        except Exception as fallback_error:
+            print(f"❌ Fallback launch also failed: {str(fallback_error)}")
+            print("\n🔧 Troubleshooting tips:")
+            print("1. Make sure all dependencies are installed: pip install gradio plotly trimesh numpy")
+            print("2. Check if port is available")
+            print("3. Try running without --share flag")
+            print("4. Ensure models exist in ./outputs directory")
+            raise
+
 if __name__ == '__main__':
     import argparse
     
@@ -405,14 +505,8 @@ if __name__ == '__main__':
     
     args = parser.parse_args()
     
-    try:
-        interface.launch(
-            server_port=args.port,
-            server_name="0.0.0.0" if args.listen else None,
-            share=args.share,
-            debug=True
-        )
-    except Exception as e:
-        print(f"Failed to launch interface: {str(e)}")
-        # Fallback to basic launch
-        interface.launch()
+    safe_launch_interface(
+        port=args.port,
+        listen=args.listen,
+        share=args.share
+    )
