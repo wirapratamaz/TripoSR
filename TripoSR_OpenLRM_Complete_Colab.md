@@ -1058,110 +1058,23 @@ print("  ✅ Improved handling of complex geometries")
 print("  ✅ Enhanced texture and detail preservation")
 print("  ✅ Faster convergence during training")
 
-## 📊 Cell 9: Performance Evaluation & Metrics
+## 🎨 Cell 9: Launch 3D Model Preview Interface
 
-# Evaluate the integrated system and show improvements.
-import pandas as pd
-import matplotlib.pyplot as plt
-import numpy as np
+# Launch the Gradio preview interface to visualize and evaluate generated 3D models.
+print("🚀 Launching 3D Model Preview & Evaluation Interface...")
 
-print("📊 TripoSR + OpenLRM Performance Evaluation")
-print("="*50)
+# Install required packages for the preview interface
+print("📦 Installing preview interface dependencies...")
+!pip install -q gradio plotly trimesh numpy
 
-# Simulated performance metrics comparison
-metrics_data = {
-    'Metric': [
-        'Chamfer Distance (↓)',
-        'IoU Score (↑)', 
-        'LPIPS (↓)',
-        'Training Time (↓)',
-        'Memory Usage (↓)',
-        'Convergence Speed (↑)'
-    ],
-    'Original TripoSR': [0.045, 0.72, 0.23, 120, 8.5, 0.65],
-    'TripoSR + OpenLRM': [0.032, 0.84, 0.18, 95, 7.2, 0.82],
-    'Improvement (%)': [28.9, 16.7, 21.7, 20.8, 15.3, 26.2]
-}
+# Launch the gradio preview interface
+print("🎨 Starting Gradio interface for 3D model preview...")
+print("📍 This interface will display models from the outputs directory")
+print("📊 Includes comprehensive metrics evaluation and visualization")
+print("🔄 Supports model comparison and historical tracking")
 
-df = pd.DataFrame(metrics_data)
-print("\n📈 Performance Comparison:")
-print(df.to_string(index=False))
+# Run the gradio preview application
+!python gradio_preview.py --share --port 7860
 
-# Create visualization
-fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(14, 10))
-fig.suptitle('TripoSR + OpenLRM Performance Analysis', fontsize=16)
-
-# Metric comparison bar chart
-metrics = df['Metric']
-original = df['Original TripoSR']
-enhanced = df['TripoSR + OpenLRM']
-
-x = np.arange(len(metrics))
-width = 0.35
-
-ax1.bar(x - width/2, original, width, label='Original TripoSR', alpha=0.8, color='skyblue')
-ax1.bar(x + width/2, enhanced, width, label='TripoSR + OpenLRM', alpha=0.8, color='lightcoral')
-ax1.set_xlabel('Metrics')
-ax1.set_ylabel('Score')
-ax1.set_title('Performance Comparison')
-ax1.set_xticks(x)
-ax1.set_xticklabels([m.split(' (')[0] for m in metrics], rotation=45, ha='right')
-ax1.legend()
-ax1.grid(True, alpha=0.3)
-
-# Improvement percentage
-improvements = df['Improvement (%)'].values
-colors = ['green' if imp > 0 else 'red' for imp in improvements]
-ax2.bar(range(len(improvements)), improvements, color=colors, alpha=0.7)
-ax2.set_xlabel('Metrics')
-ax2.set_ylabel('Improvement (%)')
-ax2.set_title('Performance Improvements')
-ax2.set_xticks(range(len(metrics)))
-ax2.set_xticklabels([m.split(' (')[0] for m in metrics], rotation=45, ha='right')
-ax2.grid(True, alpha=0.3)
-ax2.axhline(y=0, color='black', linestyle='-', alpha=0.5)
-
-# Training convergence comparison
-epochs = np.arange(1, 21)
-original_loss = 1.0 * np.exp(-epochs * 0.15) + 0.1
-enhanced_loss = 1.0 * np.exp(-epochs * 0.22) + 0.05
-
-ax3.plot(epochs, original_loss, 'b-', linewidth=2, label='Original TripoSR', marker='o')
-ax3.plot(epochs, enhanced_loss, 'r-', linewidth=2, label='TripoSR + OpenLRM', marker='s')
-ax3.set_xlabel('Epoch')
-ax3.set_ylabel('Loss')
-ax3.set_title('Training Convergence')
-ax3.legend()
-ax3.grid(True, alpha=0.3)
-ax3.set_yscale('log')
-
-# Resource utilization
-resources = ['GPU Memory', 'Training Time', 'Inference Speed']
-original_usage = [100, 100, 100]  # Baseline
-enhanced_usage = [85, 79, 125]   # Improved
-
-ax4.bar(resources, original_usage, alpha=0.6, label='Original TripoSR', color='skyblue')
-ax4.bar(resources, enhanced_usage, alpha=0.8, label='TripoSR + OpenLRM', color='lightcoral')
-ax4.set_ylabel('Relative Performance (%)')
-ax4.set_title('Resource Utilization')
-ax4.legend()
-ax4.grid(True, alpha=0.3)
-ax4.axhline(y=100, color='black', linestyle='--', alpha=0.5, label='Baseline')
-
-plt.tight_layout()
-plt.show()
-
-print("\n🎯 Key Findings:")
-print("✅ OpenLRM integration significantly improves 3D reconstruction quality")
-print("✅ Faster training convergence with better feature representations")
-print("✅ Reduced memory usage through optimized architecture")
-print("✅ Better handling of complex object geometries")
-print("✅ Enhanced texture and detail preservation")
-
-print("\n💡 CTO Summary:")
-print("The TripoSR + OpenLRM integration successfully demonstrates:")
-print("• 28.9% improvement in geometric accuracy (Chamfer Distance)")
-print("• 16.7% better shape completeness (IoU Score)")
-print("• 20.8% faster training time")
-print("• 15.3% reduced memory usage")
-print("• Enhanced 3D generation capabilities suitable for production use")
+print("\n✅ Preview interface launched!")
+print("🌐 Access the interface through the public URL provided above")
