@@ -334,16 +334,19 @@ Supported formats: .obj, .glb"""
 with gr.Blocks(title="3D Model Preview & Evaluation") as interface:
     gr.Markdown(
         """
-# 3D Model Preview & Evaluation
+# 🎯 3D Model Preview & Evaluation
 
-Preview and evaluate the latest 3D model generated from the training process.
-This interface automatically loads the most recent model from the `outputs` directory and provides comprehensive metrics evaluation.
+**Automatic 3D Model Viewer** - No manual upload required!
 
-## Features:
-- Automatically load and preview the latest generated 3D model (OBJ/GLB)
-- Calculate and visualize evaluation metrics
-- Compare current model with historical averages
-- Interactive 3D model viewer with multiple display options
+This interface automatically detects and loads the latest 3D model generated from your training process.
+Models are auto-loaded from the `./outputs` directory with comprehensive metrics evaluation.
+
+## ✨ Features:
+- 🔄 **Auto-detection**: Automatically finds and loads the latest generated 3D model (OBJ/GLB)
+- 📊 **Smart Metrics**: Calculate and visualize comprehensive evaluation metrics
+- 📈 **Historical Comparison**: Compare current model performance with previous generations
+- 🎮 **Interactive Viewer**: 3D model viewer with rotation, zoom, and inspection tools
+- 🚫 **No Upload Needed**: Models are automatically loaded from training output
         """
     )
     
@@ -354,9 +357,10 @@ This interface automatically loads the most recent model from the `outputs` dire
             gr.Markdown(
                 """
 ### Instructions:
-1. Click "Evaluate Latest Model" to automatically load and evaluate the most recent generated model
-2. View comprehensive metrics and 3D preview in the tabs below
-3. The interface will automatically detect models from the outputs directory
+1. **Automatic Loading**: The interface automatically loads the latest model from `./outputs` directory
+2. Click "📊 Evaluate Latest Model" to refresh and evaluate the most recent model
+3. View the 3D model preview and comprehensive metrics in the tabs below
+4. **No manual upload needed** - models are auto-detected from training output
                 """
             )
         
@@ -364,8 +368,10 @@ This interface automatically loads the most recent model from the `outputs` dire
             with gr.Tabs():
                 with gr.TabItem("3D Visualization"):
                     output_model_obj = gr.Model3D(
-                        label="3D Model Preview",
-                        interactive=True
+                        label="3D Model Preview - Auto-loaded from outputs directory",
+                        interactive=False,
+                        show_label=True,
+                        height=400
                     )
                 
                 with gr.TabItem("Evaluation Metrics"):
@@ -379,7 +385,7 @@ This interface automatically loads the most recent model from the `outputs` dire
                     with gr.Row():
                         metrics_text = gr.Textbox(
                             label="Detailed Metrics", 
-                            value="Select a model and click 'Evaluate Model' to see metrics.",
+                            value="🔄 Auto-loading latest model... Click 'Evaluate Latest Model' to refresh metrics.",
                             lines=8
                         )
                 
